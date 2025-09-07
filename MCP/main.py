@@ -1,22 +1,24 @@
-# app.py
-import os, math, re, traceback, logging, base64
+# main.py
+import os, math, re, traceback, logging, base64, json
 from typing import List, Optional, Dict, Any
+import requests
 
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, conint, constr
 from sqlalchemy import create_engine, text, bindparam
 from sqlalchemy.exc import SQLAlchemyError, OperationalError, ProgrammingError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import certifi
-import google.generativeai as genai
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # =======================
 # Konfigurasi & Logging
 # =======================
-DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
+DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_NAME = os.getenv("DB_NAME", "")
 DB_USER = os.getenv("DB_USER", "root")
@@ -26,8 +28,14 @@ PRICE_MARKUP = float(os.getenv("PRICE_MARKUP", "1.0"))
 INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "super-secret-token")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL  = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
 DEBUG = os.getenv("DEBUG", "0") in ("1", "true", "True")
+
+# Proxy Configuration - Gunakan yang TERBUKTI BERHASIL
+GEMINI_PROXY = {
+    "http": "http://8.213.131.36:8080",   # Korea - TESTED ✅
+    "https": "http://8.213.131.36:8080"   # Korea - TESTED ✅
+}
 
 # Hindari error SSL di Windows (cURL 60) dengan CA bundle certifi
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
@@ -50,21 +58,29 @@ engine = create_engine(
 
 if not GEMINI_API_KEY:
     logger.warning("GEMINI_API_KEY kosong. Endpoint /chat akan menolak request.")
-else:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 app = FastAPI(title="Catalog+Chat Service", version="3.0.0")
+
 origins = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://43.173.29.242:8080"
 ]
+
+# Add TrustedHostMiddleware (fixed - without port)
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1", "43.173.29.242"]
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # Izinkan semua method (GET, POST, dll)
-    allow_headers=["*"], # Izinkan semua header, termasuk X-Internal-Token & X-CSRF-TOKEN
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 # =======================
 # Pydantic Models
 # =======================
@@ -80,10 +96,8 @@ class ProductOut(BaseModel):
     price: float
 
 class ChatRequest(BaseModel):
-    # Backend TIDAK simpan/olah history. Frontend kirim prompt penuh yang sudah berisi konteksnya.
     message: constr(strip_whitespace=True, min_length=1, max_length=100000)
     image: Optional[str] = None  # data URL: "data:image/png;base64,AAA..."
-    # Agar kompatibel dengan caller lama, boleh kirim branch_id tapi backend akan mengabaikan.
     branch_id: Optional[int] = None
 
     class Config:
@@ -103,7 +117,6 @@ def require_internal_token(x_internal_token: str = Header(default="")):
 
 # =======================
 # Helper HPP → price (samakan regex PHP)
-# PHP: /hpp\s*[:=]\s*([\d\.]+)/i
 # =======================
 HPP_RE = re.compile(r'hpp\s*[:=]\s*([\d\.]+)', re.IGNORECASE)
 
@@ -130,14 +143,100 @@ def error_response(status: int, msg: str, exc: Exception | None = None) -> JSONR
     return JSONResponse(status_code=status, content=payload)
 
 # =======================
-# Health
+# Gemini API dengan Requests (Direct)
 # =======================
+def call_gemini_api(message: str, image_data: Optional[bytes] = None) -> str:
+    """Call Gemini API langsung dengan requests dan proxy"""
+    
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY belum diset.")
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    # Prepare content parts
+    parts = [{"text": message}]
+    
+    # Add image if provided
+    if image_data:
+        # Convert image to base64 for API
+        import base64
+        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        parts.append({
+            "inline_data": {
+                "mime_type": "image/jpeg",  # Adjust based on actual mime type
+                "data": image_b64
+            }
+        })
+    
+    data = {
+        "contents": [
+            {
+                "parts": parts
+            }
+        ]
+    }
+    
+    try:
+        logger.info(f"Calling Gemini API dengan proxy: {GEMINI_PROXY['http']}")
+        
+        response = requests.post(
+            url, 
+            headers=headers, 
+            json=data, 
+            proxies=GEMINI_PROXY, 
+            timeout=30
+        )
+        
+        logger.info(f"Gemini API response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            reply = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+            
+            if reply:
+                logger.info(f"✅ Gemini API sukses, reply length: {len(reply)}")
+                return reply
+            else:
+                raise HTTPException(status_code=502, detail="Empty response from Gemini API")
+                
+        elif response.status_code == 429:
+            logger.warning("Rate limit exceeded, tapi ini seharusnya tidak terjadi dengan proxy")
+            raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded")
+        else:
+            logger.error(f"Gemini API error: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=502, detail=f"Gemini API error: {response.status_code}")
+            
+    except requests.exceptions.Timeout:
+        logger.error("Gemini API timeout")
+        raise HTTPException(status_code=504, detail="Gemini API timeout")
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Cannot connect to Gemini API: {e}")
+        raise HTTPException(status_code=502, detail="Cannot connect to Gemini API")
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON response from Gemini API: {e}")
+        raise HTTPException(status_code=502, detail="Invalid JSON response from Gemini API")
+
+# =======================
+# Health & Root Endpoints
+# =======================
+@app.get("/")
+async def root():
+    return {
+        "message": "Catalog+Chat Service is running", 
+        "version": "3.0.0",
+        "status": "OK"
+    }
+
 @app.get("/health")
 def health():
     try:
         with engine.connect() as conn:
             conn.exec_driver_sql("SELECT 1")
-        return {"status": "ok"}
+        return {"status": "ok", "database": "connected"}
     except Exception as e:
         logger.exception("Health check DB gagal: %s", e)
         return JSONResponse(status_code=500, content={"status": "db_error", "detail": str(e)})
@@ -226,22 +325,20 @@ def get_catalog(req: CatalogRequest, _: bool = Depends(require_internal_token)):
         return error_response(500, "Unexpected error.", e)
 
 # =======================
-# /chat – TANPA HISTORY di backend
+# /chat – MENGGUNAKAN REQUESTS LANGSUNG
 # =======================
 @app.post("/chat", response_model=ChatReply)
 def chat(req: ChatRequest, _: bool = Depends(require_internal_token)):
     """
     Frontend WAJIB menyusun prompt yang sudah memuat konteks (katalog, instruksi, dsb).
-    Backend hanya meneruskan "message" & (opsional) "image" ke Gemini dalam satu kali turn.
+    Backend hanya meneruskan "message" & (opsional) "image" ke Gemini dengan requests langsung.
     """
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY belum diset.")
 
     try:
-        # 1) Siapkan parts user
-        user_parts: List[Any] = [req.message]
-
-        # 2) Jika ada gambar (data URL base64), parse & lampirkan
+        # Handle image if provided
+        image_data = None
         if req.image:
             if "," not in req.image:
                 raise HTTPException(status_code=400, detail="Format gambar tidak valid (data URL).")
@@ -254,16 +351,13 @@ def chat(req: ChatRequest, _: bool = Depends(require_internal_token)):
             if len(b64) > 6 * 1024 * 1024:
                 raise HTTPException(status_code=413, detail="Gambar terlalu besar. Maks 5MB (base64).")
             try:
-                blob = base64.b64decode(b64, validate=True)
+                image_data = base64.b64decode(b64, validate=True)
             except Exception:
                 raise HTTPException(status_code=400, detail="Base64 gambar korup.")
-            user_parts.append({"mime_type": mime, "data": blob})
 
-        # 3) Panggil Gemini (single-turn, tanpa history)
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        response = model.generate_content(user_parts)
-
-        reply_text = getattr(response, "text", None) or ""
+        # Call Gemini API dengan requests langsung
+        reply_text = call_gemini_api(req.message, image_data)
+        
         return {"reply": reply_text}
 
     except HTTPException:

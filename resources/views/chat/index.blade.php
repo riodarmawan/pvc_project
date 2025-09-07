@@ -1,450 +1,293 @@
-<!DOCTYPE html>
-<html lang="id">
+<!doctype html>
+<html lang="id" data-theme="auto">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>AI Chat - Cabang: {{ $branch->name }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* === ROOT VARIABLES & THEME SYSTEM === */
-        :root {
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --primary-light: #e0e7ff;
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --bg-primary: #ffffff;
-            --bg-secondary: #f9fafb;
-            --bg-chat: #f3f4f6;
-            --border-color: #e5e7eb;
-            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-            --gradient-start: #667eea;
-            --gradient-end: #764ba2;
-        }
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Customer Service AI — Cabang: {{ $branch->name }}</title>
 
-        [data-theme="dark"] {
-            --primary: #6366f1;
-            --primary-hover: #5b21b6;
-            --primary-light: #312e81;
-            --text-primary: #f9fafb;
-            --text-secondary: #d1d5db;
-            --bg-primary: #111827;
-            --bg-secondary: #1f2937;
-            --bg-chat: #374151;
-            --border-color: #4b5563;
-            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.2), 0 4px 6px -4px rgb(0 0 0 / 0.2);
-            --gradient-start: #4c1d95;
-            --gradient-end: #7c3aed;
-        }
+  <!-- Tailwind (utility) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Open Props (design tokens opsional) -->
+  <link rel="stylesheet" href="https://unpkg.com/open-props"/>
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js" defer></script>
+  <!-- DOMPurify -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <!-- Lucide Icons (opsional) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.css">
+  <!-- Inter (fallback untuk "OpenAI Sans") -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-        /* === BASE STYLES === */
-        * {
-            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-        }
+  <style>
+    /* ==== TOKENS & THEME ==== */
+    :root{
+      --accent: #74AA9C;          /* ChatGPT green */
+      --accent-alt: #10A37F;      /* OpenAI teal */
+      --text: #111214;
+      --muted: #6B7178;
+      --bg: #ffffff;
+      --surface: #F7F7F8;
+      --border: #E5E7EB;
+      --radius: 14px;
+      --composer-h: 76px;         /* disesuaikan JS */
+      color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root[data-theme="auto"]{
+        --text: #E6E8EB;
+        --muted:#A3A9B1;
+        --bg:#0B0F14;
+        --surface:#14161A;
+        --border:#2A2F37;
+      }
+    }
+    :root[data-theme="dark"]{
+      --text:#E6E8EB; --muted:#A3A9B1; --bg:#0B0F14; --surface:#14161A; --border:#2A2F37;
+    }
+    :root[data-theme="light"]{
+      --text:#111214; --muted:#6B7178; --bg:#ffffff; --surface:#F7F7F8; --border:#E5E7EB;
+    }
 
-        body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-        }
+    /* ==== BASE ==== */
+    *{ box-sizing: border-box }
+    html,body{ height:100%; }
+    body{
+      font-family: "OpenAI Sans", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
+                   "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin:0;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:8px }
 
-        /* === LAYOUT COMPONENTS === */
-        .chat-container {
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            box-shadow: var(--shadow-lg);
-        }
+    /* ==== APP SHELL (full-bleed, no frame) ==== */
+    .app{
+      min-height: 100svh; /* viewport unit baru - mobile */
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+      background: var(--bg);
+    }
 
-        .header-gradient {
-            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-            position: relative;
-            overflow: hidden;
-        }
+    /* Header (sticky, minimal) */
+    .appbar{
+      position: sticky; top: 0; z-index: 20;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: saturate(120%) blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-dot{
+      width: 20px; height: 20px; border-radius: 8px;
+      background: radial-gradient(75% 75% at 30% 30%, var(--accent), var(--accent-alt));
+      box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / .25);
+    }
+    .btn-ghost{
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--surface) 60%, var(--bg));
+      border-radius: 12px; padding: 8px; display: grid; place-items:center;
+      transition: transform .06s ease, background .15s ease;
+    }
+    .btn-ghost:hover{ background: color-mix(in srgb, var(--surface) 80%, var(--bg)); }
+    .btn-ghost:active{ transform: translateY(1px); }
 
-        .header-gradient::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-            animation: shimmer 3s infinite;
-        }
+    /* Stream (centered max-width, no outer card) */
+    .stream{
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 16px 16px calc(var(--composer-h) + env(safe-area-inset-bottom, 0px) + 24px);
+      overflow: auto;
+    }
 
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
+    /* Bubbles */
+    .msg{ display:grid; grid-template-columns: 36px 1fr; gap: 12px; align-items:start; }
+    .avatar{
+      width: 36px; height: 36px; border-radius: 999px;
+      background: var(--surface); border: 1px solid var(--border);
+      display:grid; place-items:center; font-size: 12px; color: var(--muted);
+    }
+    .bubble{
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 14px 14px 10px; position: relative;
+      animation: msgIn .3s ease;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    .bubble--user{
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #fff 8%), var(--accent-alt));
+      color: #fff; border-color: transparent;
+    }
+    @keyframes msgIn{ from{opacity:0; transform: translateY(12px) scale(.98)} to{opacity:1; transform:none} }
+    .meta{ font-size:12px; color: var(--muted); margin-top: 6px; display:flex; gap:10px; }
 
-        /* === THEME TOGGLE === */
-        .theme-toggle {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+    /* Markdown styles */
+    .bubble h1{ font-size:24px; margin:0 0 8px }
+    .bubble h2{ font-size:20px; margin:10px 0 6px }
+    .bubble h3{ font-size:18px; margin:10px 0 6px }
+    .bubble p{ margin:0 0 10px }
+    .bubble ul,.bubble ol{ margin:8px 0 10px 22px }
+    .bubble blockquote{
+      border-left:3px solid var(--accent);
+      margin:6px 0 10px; padding:6px 10px;
+      background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+      border-radius: 10px;
+    }
+    .bubble code:not(pre code){
+      background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+      border:1px solid var(--border); border-radius: 8px; padding: 2px 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:.92em;
+    }
+    pre{
+      background:#0d1117; color:#e6edf3; border-radius: 12px; overflow:auto; padding:12px;
+      border:1px solid #1f2328; position:relative; margin:8px 0 10px;
+    }
+    .code-actions{ position:absolute; top:8px; right:8px; display:flex; gap:6px; }
+    .code-btn{
+      border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08);
+      color:#fff; font-size:12px; border-radius:8px; padding:4px 8px; cursor:pointer;
+    }
 
-        .theme-toggle:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
+    /* Typing */
+    .typing{ display:inline-flex; gap:6px; align-items:center; }
+    .dot{ width:6px; height:6px; border-radius:999px; background: var(--accent); animation: bounce 1.2s infinite ease-in-out; }
+    .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
+    @keyframes bounce{ 0%,80%,100%{ transform: translateY(0); opacity:.6 } 40%{ transform: translateY(-4px); opacity:1 } }
 
-        /* === CHAT MESSAGES === */
-        .message-animation {
-            animation: messageSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
+    /* Composer (fixed) */
+    .composer{
+      position: fixed; left:0; right:0; bottom:0; z-index: 30;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: saturate(120%) blur(8px);
+      border-top: 1px solid var(--border);
+      padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+      display: grid; place-items: center;
+    }
+    .composer__inner{ width:100%; max-width: 780px; display:grid; gap:8px; }
+    .composer__row{ display:grid; grid-template-columns: auto 1fr auto; gap:8px; align-items:end; }
+    .textarea{
+      border:1px solid var(--border); background: var(--bg); color: var(--text);
+      border-radius: var(--radius); padding: 12px 14px; min-height:44px; max-height: 220px;
+      resize: none; overflow: auto; line-height:1.5; font-size:15px;
+    }
+    .btn-icon{
+      width: 42px; height: 42px; display:grid; place-items:center;
+      border-radius: 12px; border:1px solid var(--border);
+      background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+      color: var(--text); transition: background .15s ease, transform .06s ease;
+    }
+    .btn-icon:hover{ background: color-mix(in srgb, var(--surface) 80%, var(--bg)) }
+    .btn-icon:active{ transform: translateY(1px) }
+    .btn-send{
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 94%, #fff 6%), var(--accent-alt));
+      color:#fff; border: none;
+    }
 
-        @keyframes messageSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px) scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
+    /* Chips (preview upload) */
+    .chips{ display:flex; gap:8px; flex-wrap: wrap; align-items:center; padding:0 4px 6px; }
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      background: var(--surface); border:1px solid var(--border); color: var(--text);
+      border-radius: 999px; padding:6px 10px; font-size: 13px;
+    }
+    .chip img{ width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid var(--border); }
+    .chip .rm{ border:none; background:transparent; color: var(--muted); cursor:pointer; }
 
-        .user-message {
-            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-            color: white;
-            box-shadow: var(--shadow);
-            position: relative;
-            overflow: hidden;
-        }
+    /* Price highlight (dipakai di JS) */
+    .price-highlight{
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff; padding: 2px 8px; border-radius: 8px; font-weight: 600;
+      box-shadow: 0 1px 3px rgba(16,185,129,.3);
+    }
 
-        .ai-message {
-            background: var(--bg-chat);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            box-shadow: var(--shadow);
-        }
+    /* Scrollbar */
+    .stream::-webkit-scrollbar{ width:8px; height:8px } .stream::-webkit-scrollbar-thumb{ background: var(--border); border-radius:6px }
+    .stream::-webkit-scrollbar-thumb:hover{ background: var(--muted) }
 
-        .avatar {
-            background: var(--primary-light);
-            color: var(--primary);
-            font-weight: 600;
-            box-shadow: var(--shadow);
-            transition: all 0.3s ease;
-        }
-
-        .avatar:hover {
-            transform: scale(1.1);
-            box-shadow: var(--shadow-lg);
-        }
-
-        /* === ENHANCED LOADING ANIMATION === */
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 16px 0;
-        }
-
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--primary);
-            animation: typingBounce 1.4s infinite ease-in-out;
-        }
-
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        .typing-dot:nth-child(3) { animation-delay: 0s; }
-
-        @keyframes typingBounce {
-            0%, 80%, 100% {
-                transform: scale(0.8);
-                opacity: 0.5;
-            }
-            40% {
-                transform: scale(1.2);
-                opacity: 1;
-            }
-        }
-
-        /* === INPUT FORM === */
-        .input-container {
-            background: var(--bg-primary);
-            border-top: 1px solid var(--border-color);
-            backdrop-filter: blur(10px);
-        }
-
-        .input-field {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
-            color: var(--text-primary);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .input-field:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-            background: var(--bg-primary);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-            color: white;
-            box-shadow: var(--shadow);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .btn-primary:active {
-            transform: translateY(0);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background: var(--bg-secondary);
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-            transition: all 0.3s ease;
-        }
-
-        .btn-secondary:hover {
-            background: var(--bg-chat);
-            color: var(--text-primary);
-            transform: scale(1.05);
-        }
-
-        /* === IMAGE PREVIEW === */
-        .image-preview-container {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }
-
-        .remove-image-btn {
-            background: #ef4444;
-            color: white;
-            transition: all 0.3s ease;
-        }
-
-        .remove-image-btn:hover {
-            background: #dc2626;
-            transform: scale(1.1);
-        }
-
-        /* === TYPOGRAPHY === */
-        .prose {
-            line-height: 1.7;
-        }
-
-        .prose p {
-            margin-bottom: 1em;
-            color: var(--text-primary);
-        }
-
-        .prose strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        .prose em {
-            color: var(--text-secondary);
-            font-style: italic;
-        }
-
-        .prose ul, .prose ol {
-            margin: 1em 0;
-            padding-left: 1.5em;
-        }
-
-        .prose li {
-            margin-bottom: 0.5em;
-            color: var(--text-primary);
-        }
-
-        .prose code {
-            background: var(--bg-secondary);
-            color: var(--primary);
-            padding: 2px 6px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-            font-size: 0.9em;
-        }
-
-        .price-highlight {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-weight: 600;
-            box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
-        }
-
-        /* === SCROLLBAR === */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 3px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-
-        /* === RESPONSIVE === */
-        @media (max-width: 768px) {
-            .chat-container {
-                border-radius: 0;
-                height: 100vh;
-            }
-            
-            .header-gradient {
-                padding: 1rem;
-            }
-            
-            .message-content {
-                max-width: 85vw;
-            }
-        }
-
-        /* === UTILITY ANIMATIONS === */
-        .fade-in {
-            animation: fadeIn 0.5s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .slide-up {
-            animation: slideUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-    </style>
+    /* Mobile tweaks */
+    @media (max-width: 420px){
+      .stream{ padding-left: 12px; padding-right: 12px; }
+    }
+  </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
-    <div class="chat-container w-full max-w-4xl mx-auto flex flex-col h-[90vh] rounded-2xl overflow-hidden fade-in">
-        <!-- Enhanced Header -->
-        <header class="header-gradient text-white p-6 relative">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="text-xl font-bold tracking-tight">AI Assistant</h1>
-                        <p class="text-sm opacity-90">Cabang: {{ $branch->name }}</p>
-                    </div>
-                </div>
-                
-                <!-- Theme Toggle -->
-                <button id="theme-toggle" class="theme-toggle p-3 rounded-xl">
-                    <svg id="sun-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                    </svg>
-                    <svg id="moon-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
-                    </svg>
-                </button>
-            </div>
-            <div class="mt-2">
-                <p class="text-xs opacity-75 font-medium">Powered by Google Gemini AI</p>
-            </div>
-        </header>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="appbar">
+      <div class="max-w-[780px] mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="brand-dot" aria-hidden="true"></span>
+          <div class="leading-tight">
+            <h1 class="text-base sm:text-lg font-semibold">Customer Service AI</h1>
+            <p class="text-xs text-[color:var(--muted)]">Cabang: {{ $branch->name }}</p>
+          </div>
+        </div>
+        <button id="btn-theme" class="btn-ghost" aria-label="Ganti tema" title="Ganti tema">
+          <!-- sun/moon swap via JS -->
+          <svg id="icon-sun" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10 1.4 1.4M18.4 5.6l-1.4 1.4m-10 10-1.4 1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="12" cy="12" r="4"></circle>
+          </svg>
+          <svg id="icon-moon" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </header>
 
-        <!-- Enhanced Chat Area -->
-        <main id="chat-container" class="flex-1 p-6 overflow-y-auto space-y-6 custom-scrollbar">
-            <!-- Welcome Message -->
-            <div class="flex items-start gap-4 message-animation">
-                <div class="avatar flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold">
-                    AI
-                </div>
-                <div class="ai-message flex-1 rounded-2xl p-4 max-w-2xl">
-                    <div class="prose prose-sm max-w-none">
-                        <p class="mb-0">
-                            👋 <strong>Selamat datang!</strong> Saya siap membantu Anda mencari informasi produk di cabang <span class="price-highlight">{{ $branch->name }}</span>. 
-                            Tanyakan tentang stok, harga, atau upload gambar produk yang Anda cari!
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </main>
+    <!-- Stream -->
+    <main id="stream" class="stream" role="log" aria-live="polite" aria-relevant="additions text" aria-atomic="false">
+      <!-- Welcome (opsional, boleh dihapus kalau tidak ingin pesan awal) -->
+      <div class="msg">
+        <div class="avatar" aria-hidden="true">AI</div>
+        <div class="flex-1">
+          <div class="bubble">
+            <p><strong>👋 Selamat datang!</strong> Tanyakan apa saja tentang produk & layanan kami. Kirim pesan atau unggah gambar agar kami bisa bantu lebih cepat.</p>
+          </div>
+          <div class="meta"><span>baru</span></div>
+        </div>
+      </div>
+    </main>
 
-        <!-- Enhanced Input Form -->
-        <footer class="input-container p-6">
-            <!-- Image Preview -->
-            <div id="image-preview-container" class="image-preview-container hidden mb-4 ml-14 relative max-w-xs slide-up">
-                <img id="image-preview" src="" alt="Preview" class="w-full h-auto rounded-xl"/>
-                <button id="remove-image-btn" class="remove-image-btn absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
-                    ×
-                </button>
-            </div>
+    <!-- Composer -->
+    <footer class="composer" aria-label="Bidang masukan">
+      <div class="composer__inner">
+        <div id="chips" class="chips" aria-label="Lampiran"></div>
+        <div class="composer__row">
+          <button id="btn-upload" class="btn-icon" aria-label="Unggah lampiran" title="Unggah">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 16l6-6 4 4 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 7h6v6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <input id="file" type="file" accept="image/*" class="sr-only" aria-hidden="true"/>
 
-            <form id="chat-form" class="flex items-end gap-4">
-                <!-- Upload Button -->
-                <label for="image-upload" class="btn-secondary p-3 rounded-xl cursor-pointer flex-shrink-0" title="Upload gambar">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <input type="file" id="image-upload" class="hidden" accept="image/*">
-                </label>
-                
-                <!-- Text Input -->
-                <div class="flex-1">
-                    <input type="text" id="message-input" 
-                           class="input-field w-full rounded-xl py-3 px-4 text-sm placeholder-gray-400 focus:outline-none resize-none" 
-                           placeholder="Tanya tentang produk, stok, harga, atau upload gambar..." 
-                           autocomplete="off">
-                </div>
-                
-                <!-- Send Button -->
-                <button type="submit" class="btn-primary p-3 rounded-xl flex-shrink-0">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                </button>
-            </form>
-        </footer>
-    </div>
+          <label class="sr-only" for="message">Ketik pesan</label>
+          <textarea id="message" class="textarea" rows="1" placeholder="Tulis pesan… (Enter = kirim, Shift+Enter = baris baru)"></textarea>
 
-    <!-- Pass data PHP ke JavaScript -->
-    <script>
-        const BRANCH_ID = {{ $branch->id }};
-    </script>
-    <script src="{{ asset('js/chatai.js') }}"></script>
+          <button id="btn-send" class="btn-icon btn-send" aria-label="Kirim pesan" title="Kirim">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M3 5l18 7-18 7 2-7 -2-7zm2 7h7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Pass data PHP ke JavaScript -->
+  <script>
+    // Konstanta yang dibutuhkan oleh chatai.js
+    const BRANCH_ID = {{ $branch->id }};
+  </script>
+  <!-- JS utama Anda -->
+  <script src="{{ asset('js/chatai.js') }}"></script>
 </body>
 </html>
