@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 07, 2025 at 05:07 PM
+-- Generation Time: Sep 20, 2025 at 02:06 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `final_pvc`
+-- Database: `db_final`
 --
 
 DELIMITER $$
@@ -312,6 +312,7 @@ CREATE TABLE `leftover_piece_consumptions` (
   `piece_id` bigint(20) UNSIGNED NOT NULL,
   `project_id` bigint(20) UNSIGNED NOT NULL,
   `used_m` decimal(10,3) NOT NULL,
+  `price_per_m` decimal(15,2) NOT NULL DEFAULT 0.00,
   `created_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -434,6 +435,8 @@ CREATE TABLE `pos_sales` (
   `sale_datetime` datetime NOT NULL DEFAULT current_timestamp(),
   `status` enum('DRAFT','PAID','VOID','REFUND') NOT NULL DEFAULT 'DRAFT',
   `total` decimal(18,2) NOT NULL DEFAULT 0.00,
+  `change_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `discount` decimal(15,2) NOT NULL DEFAULT 0.00,
   `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -656,6 +659,13 @@ CREATE TABLE `sessions` (
   `last_activity` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `sessions`
+--
+
+INSERT INTO `sessions` (`id`, `user_id`, `ip_address`, `user_agent`, `payload`, `last_activity`) VALUES
+('GrSyagjonp9gVCGjWjrgX6WkMYTbhWIzXAykGmQc', 1, '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', 'YTo0OntzOjY6Il90b2tlbiI7czo0MDoiR2tUek03U1hmdkdJRFN6c0I2MzNNR3hYaFNDWFplbW1OSlpDc1FtYiI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6Mzc6Imh0dHA6Ly9sb2NhbGhvc3Q6ODAwMC9wcm9kdWN0cy9pbXBvcnQiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX1zOjUwOiJsb2dpbl93ZWJfNTliYTM2YWRkYzJiMmY5NDAxNTgwZjAxNGM3ZjU4ZWE0ZTMwOTg5ZCI7aToxO30=', 1758369840);
+
 -- --------------------------------------------------------
 
 --
@@ -711,15 +721,22 @@ CREATE TABLE `stock_quants` (
 
 CREATE TABLE `stock_transfers` (
   `id` bigint(20) UNSIGNED NOT NULL,
+  `transfer_number` varchar(50) DEFAULT NULL,
   `branch_from_id` bigint(20) UNSIGNED NOT NULL,
   `branch_to_id` bigint(20) UNSIGNED NOT NULL,
+  `location_from_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `location_to_id` bigint(20) UNSIGNED DEFAULT NULL,
   `status` enum('PENDING_APPROVAL','APPROVED','REJECTED','SHIPPED','RECEIVED','CLOSED') NOT NULL DEFAULT 'PENDING_APPROVAL',
   `requested_by` bigint(20) UNSIGNED NOT NULL,
+  `created_by` bigint(20) UNSIGNED DEFAULT NULL,
   `approved_by` bigint(20) UNSIGNED DEFAULT NULL,
   `shipped_at` datetime DEFAULT NULL,
   `received_at` datetime DEFAULT NULL,
   `notes` text DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT current_timestamp()
+  `total_items` int(11) DEFAULT 0,
+  `total_qty` decimal(18,2) DEFAULT 0.00,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -831,7 +848,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `full_name`, `email`, `role_id`, `default_branch_id`, `is_active`, `created_at`) VALUES
-(1, 'owner', '$2y$12$9wVw38vLETul6SbHPpkeDuSi/zPLWf36fQsznb4TmcU3iEZLsWxiC', 'owner', NULL, 1, NULL, 1, '2025-09-07 22:06:55');
+(1, 'owner', '$2y$12$lBJ83L8MlPwt5JDCjOIZGetL7L4tkOEooKIg/6Lk284PcKjt0cMFG', 'owner', NULL, 1, NULL, 1, '2025-09-20 19:02:57');
 
 -- --------------------------------------------------------
 
@@ -1175,6 +1192,7 @@ ALTER TABLE `stock_quants`
 --
 ALTER TABLE `stock_transfers`
   ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `transfer_number` (`transfer_number`),
   ADD KEY `fk_trf_req_by` (`requested_by`),
   ADD KEY `fk_trf_app_by` (`approved_by`),
   ADD KEY `idx_trf_from` (`branch_from_id`),
