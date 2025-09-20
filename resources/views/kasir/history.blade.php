@@ -69,34 +69,39 @@
         </div>
 
         {{-- Search --}}
-        <div class="lg:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Pencarian</label>
-          <div class="flex gap-3">
-            <div class="relative flex-1">
-              <input type="text" name="q" value="{{ $q }}" 
-                     class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
-                     placeholder="Cari berdasarkan ID, nama, atau telepon...">
-              <div class="absolute inset-y-0 left-0 flex items-center pl-4">
-                <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
-                </svg>
-              </div>
-            </div>
-            <button type="submit" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-xl hover:from-blue-700 hover:to-blue-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 flex items-center">
-              <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd"></path>
-              </svg>
-              Filter
-            </button>
-            <a href="{{ route('kasir.history') }}" 
-               class="px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 flex items-center">
-              <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
-              </svg>
-              Reset
-            </a>
-          </div>
-        </div>
+{{-- Search --}}
+<div class="lg:col-span-2">
+  <label class="block text-sm font-medium text-gray-700 mb-2">
+    Pencarian
+    <span class="text-xs text-gray-500 font-normal ml-1">(ID, Nama, HP, atau kombinasi)</span>
+  </label>
+  <div class="flex gap-3">
+    <div class="relative flex-1">
+      <input type="text" name="q" value="{{ $q }}" 
+             class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+             placeholder="Contoh: Budi, 0811, Sari 081122, #123">
+      <div class="absolute inset-y-0 left-0 flex items-center pl-4">
+        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
+        </svg>
+      </div>
+    </div>
+    <button type="submit" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-xl hover:from-blue-700 hover:to-blue-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 flex items-center">
+      <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd"></path>
+      </svg>
+      Cari
+    </button>
+    <a href="{{ route('kasir.history') }}" 
+       class="px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 flex items-center">
+      <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
+      </svg>
+      Reset
+    </a>
+  </div>
+</div>
+
       </div>
     </form>
   </div>
@@ -138,105 +143,124 @@
     
     <div class="overflow-x-auto">
       <table class="w-full">
-        <thead class="bg-gray-50 border-b border-gray-200">
-          <tr>
-            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">ID</th>
-            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tanggal & Waktu</th>
-            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Cabang</th>
-            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pelanggan</th>
-            <th class="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Item</th>
-            <th class="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total</th>
-            <th class="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Aksi</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-100">
-          @forelse ($sales as $s)
-            <tr class="hover:bg-gray-50 transition-colors duration-200">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  #{{ $s->id }}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm font-medium text-gray-900">{{ $s->sale_datetime }}</div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                  {{ $s->branch_name }}
-                </span>
-              </td>
-              <td class="px-6 py-4">
-                <div class="text-sm font-medium text-gray-900">
-                  {{ $s->customer_name ?: '—' }}
-                </div>
-                @if ($s->customer_phone)
-                  <div class="text-sm text-gray-500">{{ $s->customer_phone }}</div>
-                @endif
-              </td>
-              <td class="px-6 py-4 text-center whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                  {{ (int)($s->items_qty ?? 0) }} item
-                </span>
-              </td>
-              <td class="px-6 py-4 text-right whitespace-nowrap sale-total" data-amount="{{ (float)$s->total }}">
-                <span class="text-lg font-semibold text-green-600">
-                  Rp {{ number_format((float)$s->total, 0, ',', '.') }}
-                </span>
-              </td>
-              <td class="px-6 py-4 text-center whitespace-nowrap">
-                <div class="flex items-center justify-center space-x-2">
-                  <button
-                    class="btn-detail inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200"
-                    data-sale-id="{{ $s->id }}">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
-                      <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    Detail
-                  </button>
-                  <a target="_blank"
-                     href="{{ route('kasir.history.invoice', $s->id) }}"
-                     class="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"></path>
-                    </svg>
-                    Cetak
-                  </a>
-                </div>
-              </td>
-            </tr>
-            {{-- Detail Row --}}
-            <tr id="row-detail-{{ $s->id }}" class="hidden">
-              <td colspan="7" class="px-0 py-0">
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-400">
-                  <div class="p-6 space-y-3" data-detail-container="{{ $s->id }}">
-                    <div class="flex items-center text-blue-600">
-                      <svg class="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Memuat detail transaksi...
-                    </div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-          @empty
-            <tr>
-              <td colspan="7" class="px-6 py-12 text-center">
-                <div class="flex flex-col items-center justify-center space-y-3">
-                  <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                  </svg>
-                  <div class="text-center">
-                    <h3 class="text-lg font-medium text-gray-900">Tidak ada data</h3>
-                    <p class="text-gray-500">Tidak ditemukan transaksi dengan filter yang diterapkan.</p>
-                  </div>
-                </div>
-              </td>
-            </tr>
-          @endforelse
-        </tbody>
+<thead class="bg-gray-50 border-b border-gray-200">
+  <tr>
+    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">ID</th>
+    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tanggal & Waktu</th>
+    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Cabang</th>
+    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pelanggan</th>
+    <th class="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Item</th>
+    <th class="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Kembalian</th> {{-- TAMBAH INI --}}
+    <th class="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total</th>
+    <th class="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Aksi</th>
+  </tr>
+</thead>
+
+
+<tbody class="bg-white divide-y divide-gray-100">
+  @forelse ($sales as $s)
+    <tr class="hover:bg-gray-50 transition-colors duration-200">
+      <td class="px-6 py-4 whitespace-nowrap">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          #{{ $s->id }}
+        </span>
+      </td>
+      <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-sm font-medium text-gray-900">{{ $s->sale_datetime }}</div>
+      </td>
+      <td class="px-6 py-4 whitespace-nowrap">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+          {{ $s->branch_name }}
+        </span>
+      </td>
+      <td class="px-6 py-4">
+        <div class="text-sm font-medium text-gray-900">
+          {{ $s->customer_name ?: '—' }}
+        </div>
+        @if ($s->customer_phone)
+          <div class="text-sm text-gray-500">{{ $s->customer_phone }}</div>
+        @endif
+      </td>
+      <td class="px-6 py-4 text-center whitespace-nowrap">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          {{ (int)($s->items_qty ?? 0) }} item
+        </span>
+      </td>
+      
+      {{-- TAMBAHKAN KOLOM DISKON --}}
+
+      {{-- Setelah kolom diskon, tambah kolom kembalian --}}
+<td class="px-6 py-4 text-right whitespace-nowrap">
+  @if($s->change_amount > 0)
+    <span class="text-sm font-medium text-blue-600">
+      Rp {{ number_format((float)$s->change_amount, 0, ',', '.') }}
+    </span>
+  @else
+    <span class="text-sm text-gray-400">—</span>
+  @endif
+</td>
+
+      <td class="px-6 py-4 text-right whitespace-nowrap sale-total" data-amount="{{ (float)$s->total }}">
+        <span class="text-lg font-semibold text-green-600">
+          Rp {{ number_format((float)$s->total, 0, ',', '.') }}
+        </span>
+      </td>
+      <td class="px-6 py-4 text-center whitespace-nowrap">
+        <div class="flex items-center justify-center space-x-2">
+          <button
+            class="btn-detail inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200"
+            data-sale-id="{{ $s->id }}">
+            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
+              <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
+            </svg>
+            Detail
+          </button>
+          <a target="_blank"
+             href="{{ route('kasir.history.invoice', $s->id) }}"
+             class="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200">
+            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"></path>
+            </svg>
+            Cetak
+          </a>
+        </div>
+      </td>
+    </tr>
+    
+    {{-- Detail Row - Update colspan menjadi 8 --}}
+    <tr id="row-detail-{{ $s->id }}" class="hidden">
+      <td colspan="8" class="px-0 py-0"> {{-- UBAH dari 7 menjadi 8 --}}
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-400">
+          <div class="p-6 space-y-3" data-detail-container="{{ $s->id }}">
+            <div class="flex items-center text-blue-600">
+              <svg class="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Memuat detail transaksi...
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+  @empty
+    <tr>
+      <td colspan="9" class="px-6 py-12 text-center"> {{-- UBAH dari 7 menjadi 8 --}}
+        <div class="flex flex-col items-center justify-center space-y-3">
+          <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <div class="text-center">
+            <h3 class="text-lg font-medium text-gray-900">Tidak ada data</h3>
+            <p class="text-gray-500">Tidak ditemukan transaksi dengan filter yang diterapkan.</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  @endforelse
+</tbody>
+
       </table>
     </div>
   </div>

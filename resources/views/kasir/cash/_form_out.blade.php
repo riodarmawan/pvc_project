@@ -1,6 +1,6 @@
 <div class="bg-white rounded-xl shadow p-5 space-y-4">
   <div class="font-semibold">Pengeluaran Kas Kecil</div>
-  <form class="js-ajax space-y-3" method="post" action="{{ route('kasir.cash.out') }}">
+  <form class="js-ajax js-secure-form space-y-3" method="post" action="{{ route('kasir.cash.out') }}">
     @csrf
     <input type="hidden" name="start_date" value="{{ $start }}">
     <input type="hidden" name="end_date"   value="{{ $end }}">
@@ -27,7 +27,7 @@
     </div>
 
     <div class="pt-2">
-      <button class="px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700">Simpan Pengeluaran</button>
+      <button type="submit" class="px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700">Simpan Pengeluaran</button>
     </div>
   </form>
 </div>

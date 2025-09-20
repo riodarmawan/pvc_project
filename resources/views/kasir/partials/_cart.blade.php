@@ -33,7 +33,7 @@
             <tr class="border-b border-gray-100">
               <th class="text-left py-3 px-2 text-xs font-semibold text-gray-600 uppercase tracking-wider">Produk</th>
               <th class="text-center py-3 px-2 w-24 text-xs font-semibold text-gray-600 uppercase tracking-wider">Qty</th>
-              <th class="text-right py-3 px-2 w-32 text-xs font-semibold text-gray-600 uppercase tracking-wider">Harga</th>
+              <th class="text-center py-3 px-2 w-32 text-xs font-semibold text-gray-600 uppercase tracking-wider">Harga</th>
               <th class="text-right py-3 px-2 w-32 text-xs font-semibold text-gray-600 uppercase tracking-wider">Subtotal</th>
               <th class="py-3 px-2 w-28 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Aksi</th>
             </tr>
@@ -41,6 +41,7 @@
           <tbody class="divide-y divide-gray-50">
             @foreach ($cart as $row)
               <tr class="hover:bg-gray-50 transition-colors duration-200">
+                {{-- Product Info --}}
                 <td class="py-4 px-2">
                   <div class="flex items-center space-x-3">
                     <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
@@ -48,18 +49,24 @@
                     </div>
                     <div>
                       <div class="font-medium text-gray-900">{{ $row['name'] ?? '-' }}</div>
-                      <div class="text-xs text-gray-500">SKU: {{ $row['sku'] ?? '' }}</div>
+                      <div class="text-xs text-gray-500">
+                        SKU: {{ $row['sku'] ?? '' }}
+                        @if($row['is_custom_price'] ?? false)
+                          <span class="ml-2 px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">Custom Price</span>
+                        @endif
+                      </div>
                     </div>
                   </div>
                 </td>
+
+                {{-- Quantity (Editable) --}}
                 <td class="py-4 px-2 text-center">
-                  <form class="js-ajax inline-flex items-center gap-1"
-                        method="post" action="{{ route('kasir.cart.update') }}">
+                  <form class="js-ajax inline-flex items-center gap-1" method="post" action="{{ route('kasir.cart.update') }}">
                     @csrf
                     <input type="hidden" name="product_id" value="{{ $row['product_id'] }}">
+                    <input type="hidden" name="price" value="{{ $row['price'] }}">
                     <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden">
-                      <input type="number" name="qty" min="0"
-                             value="{{ (int)($row['qty'] ?? 0) }}"
+                      <input type="number" name="qty" min="0" value="{{ (int)($row['qty'] ?? 0) }}"
                              class="w-16 px-2 py-1 text-center border-none focus:ring-0 text-sm">
                       <button class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors duration-200">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -69,12 +76,34 @@
                     </div>
                   </form>
                 </td>
-                <td class="py-4 px-2 text-right font-medium text-gray-900">
-                  Rp {{ number_format((float)($row['price'] ?? 0), 0, ',', '.') }}
+
+                {{-- Price (NEW - EDITABLE) --}}
+                <td class="py-4 px-2 text-center">
+                  <form class="js-ajax inline-flex items-center gap-1" method="post" action="{{ route('kasir.cart.update') }}">
+                    @csrf
+                    <input type="hidden" name="product_id" value="{{ $row['product_id'] }}">
+                    <input type="hidden" name="qty" value="{{ $row['qty'] }}">
+                    <div class="flex items-center">
+                      <span class="text-xs text-gray-500 mr-1">Rp</span>
+                      <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                        <input type="number" name="price" step="1" min="0" value="{{ (int)($row['price'] ?? 0) }}"
+                               class="w-20 px-2 py-1 text-right border-none focus:ring-0 text-sm {{ ($row['is_custom_price'] ?? false) ? 'bg-orange-50' : '' }}">
+                        <button class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors duration-200">
+                          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
                 </td>
+
+                {{-- Subtotal --}}
                 <td class="py-4 px-2 text-right font-semibold text-green-600">
                   Rp {{ number_format((float)($row['subtotal'] ?? 0), 0, ',', '.') }}
                 </td>
+
+                {{-- Actions --}}
                 <td class="py-4 px-2 text-center">
                   <form class="js-ajax inline" method="post" action="{{ route('kasir.cart.remove') }}">
                     @csrf

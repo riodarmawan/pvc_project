@@ -109,15 +109,10 @@
                       dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
               Penyesuaian Stok
             </a>
-            <a href="{{ route('stock.transfer.create') }}"
+            <a href="{{ route('stock.transfer.index') }}"
                class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
                       dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
               Transfer Stok
-            </a>
-            <a href="{{ route('leftovers.index') }}"
-               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
-                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
-              Sisa Potongan
             </a>
           </div>
         </div>

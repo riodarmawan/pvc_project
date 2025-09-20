@@ -125,11 +125,11 @@ protected function activeCart()
 
 protected function computeCartTotalsFromSession(array $cart, array $services, int $branchId): array
 {
-    // === Materials (bagian ini kemungkinan sudah benar)
-    $materials      = $cart['materials'] ?? [];
+    // === Materials
+    $materials = $cart['materials'] ?? [];
     $totalMaterials = 0.0;
     foreach ($materials as $m) {
-        $qty   = (float)($m['qty'] ?? 0);
+        $qty = (float)($m['qty'] ?? 0);
         $price = (float)($m['price'] ?? 0);
         if ($price <= 0 && !empty($m['product_id'])) {
             $price = $this->productHpp((int)$m['product_id']);
@@ -139,37 +139,46 @@ protected function computeCartTotalsFromSession(array $cart, array $services, in
         }
     }
 
-    // =================================================================
-    //            PERBAIKAN UTAMA ADA DI BAGIAN INI
-    // =================================================================
-    $leftovers      = $cart['leftovers'] ?? [];
-    $totalLeftovers = 0.0;
-    foreach ($leftovers as $r) {
-        $len = (float)($r['used_length_m'] ?? 0);
-        // Ganti logika ini agar mengenali 'price_m' sebagai prioritas
-        $pr  = (float)($r['price_m'] ?? ($r['price'] ?? 0)); 
-        
-        if ($len > 0 && $pr >= 0) {
-            $totalLeftovers += $len * $pr;
-        }
+    // === Leftovers
+// === Leftovers
+$leftovers = $cart['leftovers'] ?? [];
+$totalLeftovers = 0.0;
+foreach ($leftovers as $r) {
+    $len = (float)($r['used_length_m'] ?? 0);
+    $pr = (float)($r['price_m'] ?? ($r['price'] ?? 0)); // ✅ Konsisten dengan key price_m
+    
+    if ($len > 0 && $pr >= 0) {
+        $totalLeftovers += $len * $pr;
     }
-    // =================================================================
-    //                  AKHIR BAGIAN PERBAIKAN
-    // =================================================================
+}
 
-    // === Services (bagian ini kemungkinan sudah benar)
+
+    // === Services
     $totalServices = 0.0;
     foreach ($services as $s) {
         $totalServices += (float)($s['price'] ?? 0);
     }
 
+    $grandTotal = $totalMaterials + $totalLeftovers + $totalServices;
+
+    // ✅ TAMBAHKAN DEBUG LOG
+    \Log::info('Cart Totals Debug:', [
+        'materials' => $totalMaterials,
+        'leftovers' => $totalLeftovers, 
+        'services' => $totalServices,
+        'grand_total' => $grandTotal,
+        'cart_data' => $cart,
+        'services_data' => $services
+    ]);
+
     return [
         'total_materials' => $totalMaterials,
-        'total_leftovers' => $totalLeftovers, // <-- Nilai ini sekarang akan benar
-        'total_services'  => $totalServices,
-        'grand_total'     => $totalMaterials + $totalLeftovers + $totalServices,
+        'total_leftovers' => $totalLeftovers,
+        'total_services' => $totalServices,
+        'grand_total' => $grandTotal,
     ];
 }
+
 
 
 
@@ -563,23 +572,22 @@ protected function parseHpp(int $productId): float
  *
  * Baris lama di pos_sale_lines sale ini akan DIHAPUS lalu diisi ulang.
  */
-protected function syncSaleLinesFromProject(int $saleId, int $projectId): void
+protected function syncSaleLinesFromProject(int $saleId, int $projectId, int $branchId): void
 {
     $meterUom = $this->ensureUomMeterId();
 
-    DB::transaction(function () use ($saleId, $projectId, $meterUom) {
-        // bersihkan dulu
-        DB::table('pos_sale_lines')->where('pos_sale_id', $saleId)->delete();
-
+    DB::transaction(function () use ($saleId, $projectId, $meterUom, $branchId) {
         $now = now();
 
-        // 1) SERVICES
+        // 1. Bersihkan dulu semua baris lama
+        DB::table('pos_sale_lines')->where('pos_sale_id', $saleId)->delete();
+
+        // 2. SERVICES (Jasa)
         $services = DB::table('project_services')
             ->where('project_id', $projectId)
             ->orderBy('id')
             ->get();
 
-        // produk placeholder jasa
         $srvProduct = $this->ensureServiceProduct();
 
         foreach ($services as $s) {
@@ -595,7 +603,7 @@ protected function syncSaleLinesFromProject(int $saleId, int $projectId): void
             ]);
         }
 
-        // 2) MATERIAL (BOM terpakai)
+        // 3. MATERIAL dari BOM (qty_planned dengan HPP)
         $boms = DB::table('project_boms as b')
             ->join('products as p','p.id','=','b.product_id')
             ->where('b.project_id', $projectId)
@@ -604,11 +612,11 @@ protected function syncSaleLinesFromProject(int $saleId, int $projectId): void
             ->get();
 
         foreach ($boms as $b) {
-            $qty   = (float) $b->qty_planned;
+            $qty = (float) $b->qty_planned;
             if ($qty <= 0) continue;
 
             $price = $this->parseHpp((int)$b->product_id); // HPP dari notes
-            $sub   = $qty * $price;
+            $sub = $qty * $price;
 
             DB::table('pos_sale_lines')->insert([
                 'pos_sale_id' => $saleId,
@@ -621,46 +629,47 @@ protected function syncSaleLinesFromProject(int $saleId, int $projectId): void
             ]);
         }
 
-        // 3) LEFTOVER YANG DIPAKAI
-        //   kolom price_per_m OPSIONAL. Jika tidak ada → 0.
-        $hasPricePerM = false;
-        try {
-            // uji cepat ada kolom
-            DB::select('SELECT price_per_m FROM leftover_piece_consumptions WHERE 1=0');
-            $hasPricePerM = true;
-        } catch (\Throwable $e) { /* kolom tidak ada */ }
+        // 4. ✅ PERBAIKAN UTAMA: LEFTOVER CONSUMPTION
+        // Ambil data leftover yang dikonsumsi dengan harga per meter
+// 4. ✅ PERBAIKAN UTAMA: LEFTOVER CONSUMPTION
+// Ambil data leftover yang dikonsumsi dengan harga per meter dari database
+$leftoverConsumptions = DB::table('leftover_piece_consumptions as c')
+    ->join('leftover_pieces as lp','lp.id','=','c.piece_id')
+    ->join('products as p','p.id','=','lp.product_id')
+    ->where('c.project_id', $projectId)
+    ->select(
+        'lp.product_id',
+        'c.used_m',
+        'c.price_per_m' // ✅ Ambil langsung dari database
+    )
+    ->get();
 
-        $cons = DB::table('leftover_piece_consumptions as c')
-            ->join('leftover_pieces as lp','lp.id','=','c.piece_id')
-            ->join('products as p','p.id','=','lp.product_id')
-            ->where('c.project_id', $projectId)
-            ->select('lp.product_id','c.used_m',
-                DB::raw($hasPricePerM ? 'c.price_per_m' : '0 as price_per_m'))
-            ->orderBy('c.id')
-            ->get();
+foreach ($leftoverConsumptions as $consumption) {
+    $usedM = (float) $consumption->used_m;
+    $pricePerM = (float) $consumption->price_per_m; // ✅ Langsung dari database
+    
+    if ($usedM <= 0) continue;
 
-        foreach ($cons as $row) {
-            $qtyM   = (float) $row->used_m;
-            if ($qtyM <= 0) continue;
+    $subtotal = $usedM * $pricePerM;
 
-            $priceM = (float) $row->price_per_m;
-            $sub    = $qtyM * $priceM;
+    // Insert ke pos_sale_lines
+    DB::table('pos_sale_lines')->insert([
+        'pos_sale_id' => $saleId,
+        'product_id'  => (int) $consumption->product_id,
+        'uom_id'      => $meterUom, // UOM meter
+        'qty'         => $usedM,
+        'price'       => $pricePerM,
+        'discount'    => 0,
+        'subtotal'    => $subtotal,
+    ]);
+}
 
-            DB::table('pos_sale_lines')->insert([
-                'pos_sale_id' => $saleId,
-                'product_id'  => (int) $row->product_id,
-                'uom_id'      => $meterUom,   // meter
-                'qty'         => $qtyM,
-                'price'       => $priceM,
-                'discount'    => 0,
-                'subtotal'    => $sub,
-            ]);
-        }
 
-        // refresh total
+        // 5. Refresh total setelah semua data dimasukkan
         $this->refreshSaleTotal($saleId);
     });
 }
+
 
 
 /**
@@ -968,12 +977,14 @@ public function billPayAdd(Request $req, int $projectId)
 {
 // BENAR
 $v = $req->validate([
-    'method' => 'required|in:CASH,CARD,QR,TRANSFER',
-    'amount' => 'required|numeric|min:0.01',
-    'ref_no' => 'nullable|string|max:80',
+    'method'   => 'required|in:CASH,CARD,QR,TRANSFER',
+    'amount'   => 'required|numeric|min:0.01',
+    'ref_no'   => 'nullable|string|max:80',
+    'discount' => 'nullable|numeric|min:0', // <-- TAMBAHKAN INI
+    'notes'    => 'nullable|string|max:1000', // <-- TAMBAHKAN INI
 ]);
 
-    $sale = $this->getOrCreateProjectSale($projectId);
+$sale = $this->getOrCreateProjectSale($projectId);
 
 DB::transaction(function () use ($sale, $v) { // $v adalah hasil validasi
     // [+] Hitung sisa tagihan terlebih dahulu
@@ -1115,12 +1126,15 @@ public function billShow(int $projectId)
      |=======================*/
 public function finalize(Request $req)
 {
+    // 1. VALIDASI INPUT
     $data = $req->validate([
         'title'       => 'required|string|max:160',
         'customer_id' => 'nullable|integer|exists:customers,id',
         'pay_method'  => 'required|in:CASH,CARD,QR,TRANSFER',
         'pay_amount'  => 'required|numeric|min:0',
         'pay_ref'     => 'nullable|string|max:80',
+        'discount'    => 'nullable|numeric|min:0',   // ← TAMBAHKAN INI
+        'notes'       => 'nullable|string|max:1000', // ← TAMBAHKAN INI
     ]);
 
     $user     = auth()->user();
@@ -1132,11 +1146,21 @@ public function finalize(Request $req)
     $services     = $this->activeServices();
     $useLeftovers = $cart['leftovers'] ?? [];
 
-    $totals = $this->computeCartTotalsFromSession($cart, $services, $branchId);
-    $grand  = (float) $totals['grand_total'];
-
-    if ((float)$data['pay_amount'] + 0.0001 < $grand) {
-        return back()->withErrors('Jumlah pembayaran kurang dari total (Rp '.number_format($grand,0,',','.').').')->withInput();
+    // 2. HITUNG TOTAL & DISKON (PERBAIKAN)
+    $totals             = $this->computeCartTotalsFromSession($cart, $services, $branchId);
+    $grandTotal         = (float) $totals['grand_total'];
+    $discountAmount     = (float) ($data['discount'] ?? 0);
+    $totalAfterDiscount = max(0, $grandTotal - $discountAmount);
+    \Log::info('Finalize Debug:', [
+    'totals_from_session' => $totals,
+    'grand_total' => $grandTotal,
+    'discount' => $discountAmount,
+    'total_after_discount' => $totalAfterDiscount,
+    'payment_amount' => (float)$data['pay_amount']
+]);
+    // 3. VALIDASI PEMBAYARAN (PERBAIKAN LOGIKA)
+    if ((float)$data['pay_amount'] < $totalAfterDiscount - 0.0001) {
+        return back()->withErrors('Jumlah pembayaran kurang dari total tagihan (Rp '.number_format($totalAfterDiscount,0,',','.').').')->withInput();
     }
 
     // generate kode proyek
@@ -1149,7 +1173,7 @@ public function finalize(Request $req)
         ->where('branch_id',$branchId)->where('type','STORE')->value('id');
     abort_if(!$storeLocId, 422, 'Lokasi STORE untuk branch belum ada.');
 
-    $projectId = DB::transaction(function () use ($req,$uid,$branchId,$code,$cart,$services,$storeLocId,$data,$useLeftovers) {
+    $projectId = DB::transaction(function () use ($req,$uid,$branchId,$code,$cart,$services,$storeLocId,$data,$useLeftovers,$totalAfterDiscount) {
         $now = now();
 
         // 1) PROJECT
@@ -1192,52 +1216,65 @@ public function finalize(Request $req)
             ]);
         }
 
-        // 2b) KONSUMSI POTONGAN SISa + JEJAK STOCK_MOVE (qty=0)
-        foreach ($useLeftovers as $r) {
-            $pieceId = (int) ($r['piece_id'] ?? 0);
-            $used    = (float) $r['used_length_m'];
-            $avail   = (float) ($r['available_m'] ?? 0);
-            if ($pieceId <= 0 || $used <= 0) continue;
+        // 2b) KONSUMSI POTONGAN SISA + JEJAK STOCK_MOVE (qty=0)
+foreach ($useLeftovers as $r) {
+    $pieceId = (int) ($r['piece_id'] ?? 0);
+    $used    = (float) $r['used_length_m'];
+    $priceM  = (float) ($r['price_m'] ?? ($r['price'] ?? 0)); // ✅ TAMBAH INI untuk invoice
+    
+    if ($pieceId <= 0 || $used <= 0) continue;
 
-            $piece = DB::table('leftover_pieces')->where('id', $pieceId)->lockForUpdate()->first();
-            if (!$piece) abort(422, 'Potongan sisa tidak ditemukan.');
-            if ($piece->consumed_at) abort(422, 'Potongan sisa sudah habis.');
-            if (!is_null($piece->reserved_project_id) && (int)$piece->reserved_project_id !== 0) {
-                abort(422, 'Potongan sisa sedang di-reserve proyek lain.');
-            }
+    $piece = DB::table('leftover_pieces')->where('id', $pieceId)->lockForUpdate()->first();
+    if (!$piece) abort(422, 'Potongan sisa tidak ditemukan.');
+    if ($piece->consumed_at) abort(422, 'Potongan sisa sudah habis.');
+    if (!is_null($piece->reserved_project_id) && (int)$piece->reserved_project_id !== 0) {
+        abort(422, 'Potongan sisa sedang di-reserve proyek lain.');
+    }
 
-            $lenPiece = $avail > 0 ? (float)$avail : (float)$piece->length_m;
-            if ($used - $lenPiece > 0.0001) abort(422, 'Panjang pakai melebihi panjang potongan.');
+    // ✅ PERBAIKAN: Gunakan data dari database, bukan session
+    $lenPiece = (float)$piece->length_m; // Langsung dari database
+    
+    if ($used - $lenPiece > 0.0001) {
+        abort(422, 'Panjang pakai melebihi panjang potongan.');
+    }
 
-            // catat konsumsi parsial / total
-            DB::table('leftover_piece_consumptions')->insert([
-                'piece_id'   => $pieceId,
-                'project_id' => $projectId,
-                'used_m'     => $used,
-                'created_at' => $now,
-            ]);
+    // ✅ PERBAIKAN: Tambahkan price_per_m untuk invoice
+    $insertData = [
+        'piece_id'   => $pieceId,
+        'project_id' => $projectId,
+        'used_m'     => $used,
+        'created_at' => $now,
+    ];
 
-            if ($used + 0.0001 >= $lenPiece) {
-                // Habis → tandai kepemilikan project + consumed
-                DB::table('leftover_pieces')->where('id', $pieceId)->update([
-                    'reserved_project_id' => $projectId,
-                    'consumed_at'         => $now,
-                ]);
-            }
+    // Cek apakah ada kolom price_per_m
+    if (Schema::hasColumn('leftover_piece_consumptions', 'price_per_m')) {
+        $insertData['price_per_m'] = $priceM;
+    }
 
-            DB::table('stock_moves')->insert([
-                'product_id'       => (int)$piece->product_id,
-                'uom_id'           => DB::table('products')->where('id',$piece->product_id)->value('uom_id') ?? 1,
-                'qty'              => 0,
-                'from_location_id' => null,
-                'to_location_id'   => null,
-                'ref_type'         => 'PROJECT_ISSUE',
-                'ref_id'           => $projectId,
-                'state'            => 'DONE',
-                'created_by'       => $uid,
-                'created_at'       => $now,
-            ]);
-        }
+    DB::table('leftover_piece_consumptions')->insert($insertData);
+
+    if ($used + 0.0001 >= $lenPiece) {
+        // Habis → tandai kepemilikan project + consumed
+        DB::table('leftover_pieces')->where('id', $pieceId)->update([
+            'reserved_project_id' => $projectId,
+            'consumed_at'         => $now,
+        ]);
+    }
+
+    DB::table('stock_moves')->insert([
+        'product_id'       => (int)$piece->product_id,
+        'uom_id'           => DB::table('products')->where('id',$piece->product_id)->value('uom_id') ?? 1,
+        'qty'              => 0,
+        'from_location_id' => null,
+        'to_location_id'   => null,
+        'ref_type'         => 'PROJECT_ISSUE',
+        'ref_id'           => $projectId,
+        'state'            => 'DONE',
+        'created_by'       => $uid,
+        'created_at'       => $now,
+    ]);
+}
+
 
         // 3) SIMPAN SERVICES
         foreach (($services ?? []) as $s) {
@@ -1249,10 +1286,17 @@ public function finalize(Request $req)
             ]);
         }
 
-        // 4) POS HEADER
+        // 4) POS HEADER (PERBAIKAN UNTUK DISCOUNT & NOTES)
         $saleId = DB::table('pos_sales')->insertGetId([
-            'branch_id'=>$branchId,'cashier_id'=>(int)auth()->id(),'customer_id'=>$req->input('customer_id'),
-            'sale_datetime'=>$now,'status'=>'DRAFT','total'=>0,'notes'=>'Billing Proyek #'.$code,'project_id'=>$projectId,
+            'branch_id'     => $branchId,
+            'cashier_id'    => (int)auth()->id(),
+            'customer_id'   => $req->input('customer_id'),
+            'sale_datetime' => $now,
+            'status'        => 'DRAFT',
+            'total'         => 0, // Akan di-refresh nanti
+            'discount'      => (float)($data['discount'] ?? 0),        // ← TAMBAHKAN INI
+            'notes'         => $data['notes'] ?? null,                 // ← PERBAIKAN INI
+            'project_id'    => $projectId,
         ]);
 
         // 4a) JASA → produk SRV-GEN
@@ -1304,34 +1348,34 @@ public function finalize(Request $req)
             ]);
         }
 
-        // 4d) TOTAL
+        // 4d) REFRESH TOTAL
         $this->refreshSaleTotal($saleId);
 
-        // 5) PAYMENT
-// [+] LOGIKA PEMBAYARAN BARU
-$tenderedAmount = (float)$req->input('pay_amount');
-$actualTotal = (float) DB::table('pos_sales')->where('id', $saleId)->value('total'); // Ambil total tagihan
-$appliedAmount = min($tenderedAmount, $actualTotal); // Tentukan jumlah yang akan dicatat
-$change = $tenderedAmount - $appliedAmount; // Hitung kembalian
+        // 5) PAYMENT (PERBAIKAN LOGIKA KEMBALIAN)
+        $tenderedAmount = (float)$req->input('pay_amount');
+        $appliedAmount  = min($tenderedAmount, $totalAfterDiscount); // Yang dibayar max sebesar tagihan
+        $change         = $tenderedAmount - $appliedAmount;
 
-// 5) PAYMENT (Simpan jumlah yang benar)
-DB::table('pos_payments')->insert([
-    'pos_sale_id' => $saleId,
-    'method'      => $req->input('pay_method'),
-    'amount'      => $appliedAmount, // <-- PERBAIKAN: Simpan jumlah yang seharusnya
-    'ref_no'      => $req->input('pay_ref'),
-]);
+        // Simpan pembayaran
+        DB::table('pos_payments')->insert([
+            'pos_sale_id' => $saleId,
+            'method'      => $req->input('pay_method'),
+            'amount'      => $appliedAmount,
+            'ref_no'      => $req->input('pay_ref'),
+        ]);
 
-// [+] Simpan catatan kembalian (opsional tapi bagus)
-if ($change > 0 && $req->input('pay_method') === 'CASH') {
-    DB::table('pos_sales')->where('id', $saleId)->update(['notes' => 'Billing Proyek #'.$code . ' | CHANGE='.$change]);
-}
+        // Update notes dengan informasi kembalian (jika ada)
+        if ($change > 0 && $req->input('pay_method') === 'CASH') {
+            $existingNotes = $data['notes'] ?? '';
+            $changeNote = ($existingNotes ? ' | ' : '') . 'KEMBALIAN: Rp ' . number_format($change, 0, ',', '.');
+            DB::table('pos_sales')->where('id', $saleId)->update(['notes' => $existingNotes . $changeNote]);
+        }
 
         // 6) STATUS POS + PROYEK
         $paid  = $this->salePaidAmount($saleId);
-        $total = (float) DB::table('pos_sales')->where('id',$saleId)->value('total');
+        $totalWithDiscount = $totalAfterDiscount;
 
-        if ($paid + 0.0001 >= $total) {
+        if ($paid + 0.0001 >= $totalWithDiscount) {
             DB::table('pos_sales')->where('id',$saleId)->update(['status'=>'PAID']);
             DB::table('projects')->where('id',$projectId)->update(['status' => 'IN_PROGRESS']);
         }
@@ -1339,7 +1383,7 @@ if ($change > 0 && $req->input('pay_method') === 'CASH') {
         // 7) AUDIT
         DB::table('audit_logs')->insert([
             'event'=>'PROJECT_FINALIZE','user_id'=>$uid,'ref_type'=>'PROJECT','ref_id'=>$projectId,
-            'payload'=>json_encode(['cart'=>$cart,'services'=>$services]),'created_at'=>$now,
+            'payload'=>json_encode(['cart'=>$cart,'services'=>$services,'discount'=>$data['discount']??0,'notes'=>$data['notes']??'']),'created_at'=>$now,
         ]);
 
         return $projectId;
@@ -1350,6 +1394,7 @@ if ($change > 0 && $req->input('pay_method') === 'CASH') {
     return redirect()->route('projects.print.invoice.byproject', $projectId)
         ->with('ok', 'Proyek dibuat & sudah dibayar.');
 }
+
 
 
 
@@ -1587,10 +1632,24 @@ public function printInvoiceByProject(int $projectId)
     abort_if(!$project, 404);
 
     $sale = $this->getOrCreateProjectSale($projectId);
+    
+    // ✅ Sinkron jasa + material setiap buka halaman
+    $this->syncSaleLinesFromProject((int)$sale->id, $projectId, (int)$project->branch_id);
+    $this->refreshSaleTotal((int)$sale->id);
+
+    // Reload data terkini setelah refresh
+    $sale = DB::table('pos_sales')->where('id', $sale->id)->first();
+    
     $payments = DB::table('pos_payments')->where('pos_sale_id', $sale->id)->orderBy('id')->get();
     $paid = $this->salePaidAmount((int)$sale->id);
-    $due  = max(0, ((float)$sale->total - $paid));
-    $change = max(0, ($paid - (float)$sale->total));
+    
+    // ✅ PERBAIKAN: Hitung total setelah diskon
+    $subtotalBeforeDiscount = (float)$sale->total;
+    $discountAmount = (float)$sale->discount;
+    $totalAfterDiscount = max(0, ($subtotalBeforeDiscount - $discountAmount));
+    
+    $due  = max(0, ($totalAfterDiscount - $paid));
+    $change = max(0, ($paid - $totalAfterDiscount));
 
     // Ambil rincian JASA
     $serviceProduct = $this->ensureServiceProduct();
@@ -1631,7 +1690,6 @@ public function printInvoiceByProject(int $projectId)
         ->join('products as p','p.id','=','lp.product_id')
         ->where('c.project_id', $projectId)
         ->select('p.sku','p.name', DB::raw('c.used_m as length_m'));
-        // Tidak perlu get() dulu, kita gabung dengan query B
 
     $meter = DB::table('leftover_pieces as lp')
         ->join('products as p','p.id','=','lp.product_id')
@@ -1641,10 +1699,7 @@ public function printInvoiceByProject(int $projectId)
         ->union($meterA) // Gabungkan dengan query A
         ->get();
 
-    // ========================================================================
-    // AKHIR PERBAIKAN
-    // ========================================================================
-
+    // ✅ PERBAIKAN: Tambahkan data diskon dan catatan ke view
     return view('projects.print_invoice', [
         'project'             => $project,
         'sale'                => $sale,
@@ -1654,11 +1709,19 @@ public function printInvoiceByProject(int $projectId)
         'change'              => $change,
         'serviceLines'        => $serviceLines,
         'billedMaterialLines' => $billedMaterialLines,
-        'materials'           => $materials, // <-- Data ini sekarang punya format yang benar
+        'materials'           => $materials,
         'meter'               => $meter,
+        
+        // ✅ TAMBAHKAN DATA DISKON & CATATAN
+        'subtotalBeforeDiscount' => $subtotalBeforeDiscount,
+        'discountAmount'         => $discountAmount,
+        'totalAfterDiscount'     => $totalAfterDiscount,
+        'notes'                  => $sale->notes,
+        
         'title'               => 'Invoice Proyek ' . $project->code,
     ]);
 }
+
 
 
 

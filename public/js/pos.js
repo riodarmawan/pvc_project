@@ -84,6 +84,9 @@
     if (html.summary && qs('#summary-panel')) {
       qs('#summary-panel').innerHTML = html.summary;
     }
+
+    // CRITICAL: Re-bind events after DOM update
+    document.dispatchEvent(new CustomEvent('pos:refreshed'));
   }
 
   function showInvoice(html) {
@@ -95,7 +98,7 @@
   }
 
   /* =========================
-   * Event Delegation (global)
+   * Event Delegation (global) - UPDATED
    * ========================= */
 
   // 1) Klik tombol tambah dari katalog
@@ -117,7 +120,6 @@
       const { ok, data } = await postForm('/kasir/cart/add', fd);
       if (ok) {
         toast(data.message || 'Item ditambahkan.');
-        // tetap di katalog; user pindah ke checkout via tombol khusus
       } else {
         toast(data.message || 'Gagal menambah item.', 'error');
       }
@@ -129,37 +131,79 @@
     }
   });
 
-  // 2) Tombol “Ke Checkout”
+  // 2) Tombol "Ke Checkout"
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-go-checkout');
     if (!btn) return;
     goCheckout();
   });
 
+  // 3) FINALIZE BUTTON - UPDATED
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#btn-verify-finalize');
+    if (!btn || btn.disabled) return;
+
+    e.preventDefault();
+    
+    if (!confirm('Yakin ingin menyelesaikan transaksi ini?')) {
+      return;
+    }
+
+    disableEl(btn, true);
+    try {
+      const fd = new FormData();
+      const { ok, data } = await postForm('/kasir/finalize', fd);
+      
+      if (ok) {
+        toast(data.message || 'Transaksi berhasil diselesaikan!');
+        if (data.invoice_html) {
+          showInvoice(data.invoice_html);
+        }
+        if (data.redirect) {
+          setTimeout(() => window.location.href = data.redirect, 1500);
+        }
+      } else {
+        toast(data.message || 'Gagal menyelesaikan transaksi.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      toast('Terjadi kesalahan jaringan.', 'error');
+    } finally {
+      disableEl(btn, false);
+    }
+  });
+
   /* =========================
-   * MODAL: satu-satunya handler open/close
+   * MODAL: Enhanced handler
    * ========================= */
   const openModal = (sel) => {
     const m = typeof sel === 'string' ? qs(sel) : sel;
     if (m) m.classList.remove('hidden');
   };
+  
   const closeModal = (sel) => {
     const m = typeof sel === 'string' ? qs(sel) : sel;
     if (m) m.classList.add('hidden');
   };
 
-  // Open / Close by button (delegation)
+  // Open / Close by button (delegation) - ENHANCED
   document.addEventListener('click', (e) => {
+    // Handle modal open buttons
     const openBtn = e.target.closest('[data-modal-target]');
     if (openBtn && !openBtn.classList.contains('btn-modal-close')) {
       e.preventDefault();
-      openModal(openBtn.getAttribute('data-modal-target'));
+      const targetModal = openBtn.getAttribute('data-modal-target');
+      openModal(targetModal);
       return;
     }
+    
+    // Handle modal close buttons
     const closeBtn = e.target.closest('.btn-modal-close');
     if (closeBtn) {
       e.preventDefault();
-      closeModal(closeBtn.getAttribute('data-modal-target') || '#modal-customer');
+      const targetModal = closeBtn.getAttribute('data-modal-target') || '#modal-customer';
+      closeModal(targetModal);
+      return;
     }
   });
 
@@ -173,7 +217,7 @@
   });
 
   /* =========================
-   * Intersep semua form `.js-ajax`
+   * Form Submission Handler - ENHANCED
    * ========================= */
   document.addEventListener('submit', async (e) => {
     const form = e.target.closest('form.js-ajax');
@@ -197,7 +241,15 @@
       if (data.invoice_html) showInvoice(data.invoice_html);
 
       // Tutup modal customer jika quick create sukses
-      if (form.closest('#modal-customer')) closeModal('#modal-customer');
+      if (form.closest('#modal-customer')) {
+        closeModal('#modal-customer');
+      }
+      
+      // Reset form jika sukses (kecuali cart update forms)
+      if (!form.action.includes('/cart/update')) {
+        form.reset();
+      }
+
     } catch (err) {
       console.error(err);
       toast('Terjadi kesalahan jaringan.', 'error');
@@ -206,9 +258,130 @@
     }
   });
 
-  // 6) Auto-hide flash success dari server
-  window.addEventListener('DOMContentLoaded', () => {
+  /* =========================
+   * Price Input Validation - NEW
+   * ========================= */
+  document.addEventListener('input', (e) => {
+    if (e.target.name === 'price') {
+      const value = parseFloat(e.target.value) || 0;
+      if (value < 0) {
+        e.target.value = 0;
+        toast('Harga tidak boleh negatif', 'error');
+      }
+    }
+  });
+
+  /* =========================
+   * Auto-submit on blur - NEW
+   * ========================= */
+  document.addEventListener('blur', (e) => {
+    if (e.target.name === 'price' || e.target.name === 'qty') {
+      const form = e.target.closest('form.js-ajax');
+      if (form && form.action.includes('/cart/update')) {
+        // Small delay untuk UX
+        setTimeout(() => {
+          form.dispatchEvent(new Event('submit', { bubbles: true }));
+        }, 100);
+      }
+    }
+  });
+
+  /* =========================
+   * Re-bind Events After AJAX - CRITICAL FIX
+   * ========================= */
+  document.addEventListener('pos:refreshed', () => {
+    console.log('POS: DOM refreshed, re-binding events...');
+    
+    // Re-bind any specific events that might have been lost
+    // (Most events use delegation so they should work automatically)
+    
+    // Example: Re-focus first input in forms
+    const firstInput = qs('input[type="text"]:not([readonly]), input[type="number"]:not([readonly])');
+    if (firstInput && document.activeElement === document.body) {
+      setTimeout(() => firstInput.focus(), 100);
+    }
+  });
+
+  /* =========================
+   * Customer Search Enhancement - NEW
+   * ========================= */
+  let customerSearchTimeout;
+  document.addEventListener('input', (e) => {
+    if (e.target.name === 'customer_search' || e.target.id === 'customer-search') {
+      clearTimeout(customerSearchTimeout);
+      const searchInput = e.target;
+      const query = searchInput.value.trim();
+      
+      if (query.length < 2) return;
+      
+      customerSearchTimeout = setTimeout(() => {
+        // Trigger customer search
+        const currentUrl = new URL(window.location);
+        currentUrl.searchParams.set('cq', query);
+        window.location.href = currentUrl.toString();
+      }, 500);
+    }
+  });
+
+  /* =========================
+   * Number Formatting - NEW
+   * ========================= */
+  function formatNumber(num) {
+    return new Intl.NumberFormat('id-ID').format(num);
+  }
+
+  // Format price display on focus out
+  document.addEventListener('blur', (e) => {
+    if (e.target.type === 'number' && e.target.name === 'price') {
+      const value = parseFloat(e.target.value) || 0;
+      // Optionally format the display (uncomment if needed)
+      // e.target.setAttribute('data-formatted', formatNumber(value));
+    }
+  });
+
+  /* =========================
+   * Initialize on DOM ready
+   * ========================= */
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('POS System initialized');
+    
+    // Auto-hide flash messages
     const flash = qs('[data-flash-auto-hide]');
     if (flash) setTimeout(() => flash.remove(), 2500);
+    
+    // Focus first input if available
+    const firstInput = qs('input[type="text"]:not([readonly]), input[type="search"]:not([readonly])');
+    if (firstInput) setTimeout(() => firstInput.focus(), 100);
   });
+
+  /* =========================
+   * Keyboard Shortcuts - NEW
+   * ========================= */
+  document.addEventListener('keydown', (e) => {
+    // ESC to close modals
+    if (e.key === 'Escape') {
+      const openModal = qs('.fixed:not(.hidden)[id^="modal-"]');
+      if (openModal) {
+        closeModal(openModal);
+        e.preventDefault();
+      }
+    }
+    
+    // F2 to focus search
+    if (e.key === 'F2') {
+      const searchInput = qs('#q, input[name="q"]');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+        e.preventDefault();
+      }
+    }
+    
+    // F3 to go to checkout
+    if (e.key === 'F3') {
+      goCheckout();
+      e.preventDefault();
+    }
+  });
+
 })();

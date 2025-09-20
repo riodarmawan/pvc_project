@@ -1,3 +1,4 @@
+{{-- Modal Customer yang Anda berikan sebelumnya --}}
 <div id="modal-customer" class="hidden fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm">
   <div class="absolute inset-0 flex items-center justify-center p-4">
     <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl transform transition-all">

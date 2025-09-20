@@ -31,13 +31,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
 DEBUG = os.getenv("DEBUG", "0") in ("1", "true", "True")
 
-# Proxy Configuration - Gunakan yang TERBUKTI BERHASIL
-GEMINI_PROXY = {
-    "http": "http://8.213.131.36:8080",   # Korea - TESTED ✅
-    "https": "http://8.213.131.36:8080"   # Korea - TESTED ✅
-}
-
-# Hindari error SSL di Windows (cURL 60) dengan CA bundle certifi
+# SSL Certificate handling (tetap diperlukan untuk requests HTTPS)
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 os.environ.setdefault("CURL_CA_BUNDLE", certifi.where())
 
@@ -143,10 +137,10 @@ def error_response(status: int, msg: str, exc: Exception | None = None) -> JSONR
     return JSONResponse(status_code=status, content=payload)
 
 # =======================
-# Gemini API dengan Requests (Direct)
+# Gemini API dengan Requests (Tanpa Proxy)
 # =======================
 def call_gemini_api(message: str, image_data: Optional[bytes] = None) -> str:
-    """Call Gemini API langsung dengan requests dan proxy"""
+    """Call Gemini API langsung dengan requests tanpa proxy"""
     
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY belum diset.")
@@ -181,14 +175,14 @@ def call_gemini_api(message: str, image_data: Optional[bytes] = None) -> str:
     }
     
     try:
-        logger.info(f"Calling Gemini API dengan proxy: {GEMINI_PROXY['http']}")
+        logger.info("Calling Gemini API (direct connection)")
         
         response = requests.post(
             url, 
             headers=headers, 
             json=data, 
-            proxies=GEMINI_PROXY, 
-            timeout=30
+            timeout=30,
+            verify=True  # Ensure SSL verification is enabled
         )
         
         logger.info(f"Gemini API response status: {response.status_code}")
@@ -204,7 +198,7 @@ def call_gemini_api(message: str, image_data: Optional[bytes] = None) -> str:
                 raise HTTPException(status_code=502, detail="Empty response from Gemini API")
                 
         elif response.status_code == 429:
-            logger.warning("Rate limit exceeded, tapi ini seharusnya tidak terjadi dengan proxy")
+            logger.warning("Rate limit exceeded dari Gemini API")
             raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded")
         else:
             logger.error(f"Gemini API error: {response.status_code} - {response.text}")
@@ -216,6 +210,9 @@ def call_gemini_api(message: str, image_data: Optional[bytes] = None) -> str:
     except requests.exceptions.ConnectionError as e:
         logger.error(f"Cannot connect to Gemini API: {e}")
         raise HTTPException(status_code=502, detail="Cannot connect to Gemini API")
+    except requests.exceptions.SSLError as e:
+        logger.error(f"SSL error connecting to Gemini API: {e}")
+        raise HTTPException(status_code=502, detail="SSL error connecting to Gemini API")
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON response from Gemini API: {e}")
         raise HTTPException(status_code=502, detail="Invalid JSON response from Gemini API")
@@ -325,13 +322,13 @@ def get_catalog(req: CatalogRequest, _: bool = Depends(require_internal_token)):
         return error_response(500, "Unexpected error.", e)
 
 # =======================
-# /chat – MENGGUNAKAN REQUESTS LANGSUNG
+# /chat – TANPA PROXY
 # =======================
 @app.post("/chat", response_model=ChatReply)
 def chat(req: ChatRequest, _: bool = Depends(require_internal_token)):
     """
     Frontend WAJIB menyusun prompt yang sudah memuat konteks (katalog, instruksi, dsb).
-    Backend hanya meneruskan "message" & (opsional) "image" ke Gemini dengan requests langsung.
+    Backend hanya meneruskan "message" & (opsional) "image" ke Gemini tanpa proxy.
     """
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY belum diset.")
@@ -355,7 +352,7 @@ def chat(req: ChatRequest, _: bool = Depends(require_internal_token)):
             except Exception:
                 raise HTTPException(status_code=400, detail="Base64 gambar korup.")
 
-        # Call Gemini API dengan requests langsung
+        # Call Gemini API tanpa proxy
         reply_text = call_gemini_api(req.message, image_data)
         
         return {"reply": reply_text}

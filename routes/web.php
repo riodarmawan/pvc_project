@@ -12,6 +12,7 @@ use App\Http\Controllers\ProductApiController;
 use App\Http\Controllers\GeminiChatController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\StockTransferController;
 /* ========== Auth ========== */
 Route::get('/login',  [AuthController::class,'showLogin'])->name('login');
 Route::post('/login', [AuthController::class,'login'])->name('login.do');
@@ -94,6 +95,8 @@ Route::post('/projects/{project}/bill/clear', [ProjectController::class,'billCle
 Route::get('/projects/{project}/bill', [ProjectController::class,'billShow'])
     ->name('projects.bill.show');
 
+// Tambahkan di dalam group kasir (role:3)
+Route::post('/kasir/discount/update', [PosController::class,'discountUpdate'])->name('kasir.discount.update');
 
     
 });
@@ -116,6 +119,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/stock/adjust', [\App\Http\Controllers\StockAdjustmentController::class, 'store'])->name('stock.adjust.store');
     Route::get('/stock/transfer',  [\App\Http\Controllers\StockTransferController::class, 'create'])->name('stock.transfer.create');
     Route::post('/stock/transfer', [\App\Http\Controllers\StockTransferController::class, 'store'])->name('stock.transfer.store');
+    Route::get('/stock/transfer/history', [StockTransferController::class, 'index'])->name('stock.transfer.index');
+    Route::get('/stock/transfer/{id}/delivery-note', [StockTransferController::class, 'printDeliveryNote'])->name('stock.transfer.delivery-note');
+// AJAX Route untuk dropdown dengan stok
+    Route::get('/api/products-with-stock', [StockTransferController::class, 'getProductsWithStock'])->name('api.products-with-stock');
     Route::get('/purchase/direct/create', [\App\Http\Controllers\DirectPurchaseController::class, 'create'])->name('purchase.direct.create');
 Route::post('/purchase/direct', [\App\Http\Controllers\DirectPurchaseController::class, 'store'])->name('purchase.direct.store');
 

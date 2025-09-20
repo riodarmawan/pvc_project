@@ -81,13 +81,6 @@
                     <span class="font-medium">Katalog</span>
                   </a>
 
-                  <a href="{{ route('projects.index') }}" class="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition">
-                    <svg viewBox="0 0 20 20" class="h-4 w-4 text-emerald-600" aria-hidden="true">
-                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 10-1.414 1.414l2 2a1 1 0 001.414 0l3-3z" clip-rule="evenodd"></path>
-                    </svg>
-                    <span class="font-medium">Projek</span>
-                  </a>
-
                   <a href="{{ route('kasir.history') }}" class="inline-flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition">
                     <svg viewBox="0 0 20 20" class="h-4 w-4 text-amber-600">
                       <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm0 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" clip-rule="evenodd"></path>
@@ -274,6 +267,7 @@
 
   @stack('modals')
   @stack('scripts')
+  @yield('scripts')
 
   @push('scripts')
   <script>

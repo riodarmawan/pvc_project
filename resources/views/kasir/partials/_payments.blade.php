@@ -27,41 +27,53 @@
 
   <div class="p-6 space-y-4">
     {{-- Payment Form --}}
-    <form method="post" action="{{ route('kasir.pay.add') }}" class="js-ajax space-y-4">
-      @csrf
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Metode Pembayaran</label>
-          <select name="method" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors">
-            <option value="CASH">💵 Tunai</option>
-            <option value="CARD">💳 Kartu Debit/Kredit</option>
-            <option value="QR">📱 QR Code</option>
-            <option value="TRANSFER">🏦 Transfer Bank</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Nominal Pembayaran</label>
-          <div class="relative">
-            <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">Rp</span>
-            <input type="number" step="0.01" min="0.01" required name="amount"
-                   class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                   placeholder="0">
-          </div>
-        </div>
+{{-- Payment Form --}}
+<form method="post" action="{{ route('kasir.pay.add') }}" class="js-ajax space-y-4">
+  @csrf
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Metode Pembayaran</label>
+      <select name="method" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors">
+        <option value="CASH">💵 Tunai</option>
+        <option value="CARD">💳 Kartu Debit/Kredit</option>
+        <option value="QR">📱 QR Code</option>
+        <option value="TRANSFER">🏦 Transfer Bank</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Nominal Pembayaran</label>
+      <div class="relative">
+        <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">Rp</span>
+        <input type="number" step="0.01" min="0.01" required name="amount"
+               class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+               placeholder="0">
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Referensi / No. Approval (Opsional)</label>
-        <input type="text" name="ref_no" 
-               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-               placeholder="Masukkan nomor referensi...">
-      </div>
-      <button class="w-full px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center">
-        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd"></path>
-        </svg>
-        Tambah Pembayaran
-      </button>
-    </form>
+    </div>
+  </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700 mb-2">Referensi / No. Approval (Opsional)</label>
+    <input type="text" name="ref_no" 
+           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+           placeholder="Masukkan nomor referensi...">
+  </div>
+  
+  {{-- TAMBAH INI: Input Catatan Transaksi --}}
+  <div>
+    <label class="block text-sm font-medium text-gray-700 mb-2">Catatan Transaksi (Opsional)</label>
+    <textarea name="notes" rows="2"
+              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-none"
+              placeholder="Catatan untuk transaksi ini...">{{ session('pos.notes', '') }}</textarea>
+    <p class="text-xs text-gray-500 mt-1">Catatan akan tersimpan otomatis saat menambah pembayaran</p>
+  </div>
+
+  <button class="w-full px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center">
+    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+      <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd"></path>
+    </svg>
+    Tambah Pembayaran
+  </button>
+</form>
+
 
     {{-- Payment List --}}
     @if (count($payments))

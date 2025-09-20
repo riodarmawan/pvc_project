@@ -104,10 +104,27 @@
           <span class="font-semibold text-gray-900">{{ $currency($serviceTotal) }}</span>
         </div>
 
-        <div class="flex items-center justify-between mt-3 pt-3 border-t">
-          <span class="font-semibold text-gray-800">Grand Total</span>
-          <span class="font-semibold text-gray-900">{{ $currency($grandTotal) }}</span>
-        </div>
+    <!-- TAMBAHKAN INI: Subtotal sebelum diskon -->
+    <div class="flex items-center justify-between border-t pt-2 mt-2">
+      <span class="font-medium text-gray-700">Subtotal</span>
+      <span class="font-medium text-gray-800" id="subtotal-amount" data-subtotal="{{ (float)$sum['grand_total'] }}">
+        {{ $currency($sum['grand_total']) }}
+      </span>
+    </div>
+    
+    <!-- TAMBAHKAN INI: Diskon -->
+    <div class="flex items-center justify-between">
+      <span class="text-red-600">Diskon</span>
+      <span class="text-red-600" id="discount-amount">Rp 0</span>
+    </div>
+    
+    <!-- UPDATE INI: Grand Total setelah diskon -->
+    <div class="flex items-center justify-between border-t pt-2 mt-2">
+      <span class="font-semibold text-gray-800">Grand Total</span>
+      <span class="font-semibold text-gray-900" id="grand-total" data-grand="{{ (float)$sum['grand_total'] }}">
+        {{ $currency($sum['grand_total']) }}
+      </span>
+    </div>
       </div>
     </div>
   </div>

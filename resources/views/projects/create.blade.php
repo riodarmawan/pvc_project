@@ -213,17 +213,17 @@
 </div>
 
 
-{{-- ========== SERVICES ==========
-     (tetap boleh input manual harga service) --}}
+{{-- ========== JASA / SERVICE ========== --}}
 <div class="bg-white rounded-xl shadow-soft-lg p-4 mt-4">
   <h3 class="text-sm font-semibold text-gray-700 mb-3">Jasa / Service</h3>
 
+  {{-- Form tambah service --}}
   <form action="{{ route('projects.cart.add') }}" method="POST" class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
     @csrf
     <input type="hidden" name="type" value="service">
     <div class="md:col-span-7">
       <label class="block text-xs text-gray-600 mb-1">Nama Service</label>
-      <input name="name" type="text" required class="w-full px-3 py-2 border rounded-lg" placeholder="Contoh: Ongkir / Tukang">
+      <input name="name" type="text" required class="w-full px-3 py-2 border rounded-lg" placeholder="Contoh: Ongkir, Tukang, Konsultasi">
     </div>
     <div class="md:col-span-3">
       <label class="block text-xs text-gray-600 mb-1">Harga</label>
@@ -234,52 +234,51 @@
     </div>
   </form>
 
-  <div class="overflow-hidden rounded-lg border border-gray-200">
-    <table class="min-w-full text-sm">
-      <thead class="bg-gray-50">
-        <tr>
-          <th class="px-3 py-2 text-left text-gray-600">Nama</th>
-          <th class="px-3 py-2 text-right text-gray-600">Harga</th>
-          <th class="px-3 py-2 w-48"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100 bg-white">
-        @php $services = session('project.services', []); @endphp
-        @forelse ($services as $s)
-          <tr>
-            <td class="px-3 py-2">
-              <form action="{{ route('projects.cart.update') }}" method="POST" class="flex items-center gap-2">
-                @csrf
-                <input type="hidden" name="kind" value="service">
-                <input type="hidden" name="row_id" value="{{ $s['row_id'] }}">
-                <input name="name" type="text" required value="{{ $s['name'] }}" class="flex-1 px-2 py-1 border rounded-lg">
-            </td>
-            <td class="px-3 py-2">
-                <input name="price" type="number" min="0" step="0.01" required value="{{ $s['price'] }}"
-                       class="w-36 text-right px-2 py-1 border rounded-lg">
-            </td>
-            <td class="px-3 py-2 text-right">
-                <button class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700">Update</button>
-              </form>
-              <form action="{{ route('projects.cart.remove') }}" method="POST" class="inline-block ml-2">
-                @csrf
-                <input type="hidden" name="kind" value="service">
-                <input type="hidden" name="row_id" value="{{ $s['row_id'] }}">
-                <button class="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-xs hover:bg-rose-100">Hapus</button>
-              </form>
-            </td>
-          </tr>
-        @empty
-          <tr>
-            <td colspan="3" class="px-3 py-3 text-center text-gray-500">Belum ada service.</td>
-          </tr>
-        @endforelse
-      </tbody>
-    </table>
+  {{-- Daftar service dengan titik-titik --}}
+  <div class="border rounded-lg overflow-hidden">
+    <div class="px-3 py-2 bg-gray-50 text-xs font-semibold text-gray-600">Daftar Service</div>
+    <div class="p-3">
+      @php $services = session('project.services', []); @endphp
+      @forelse ($services as $s)
+        <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+          {{-- Nama service --}}
+          <div class="flex items-center text-gray-700">
+            <svg class="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+              <path fill-rule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 001 1h6a1 1 0 001-1V3a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="font-medium">{{ $s['name'] }}</span>
+          </div>
+
+          {{-- Titik-titik pemisah --}}
+          <div class="flex-1 mx-3 border-b border-dotted border-gray-300"></div>
+
+          {{-- Harga dan tombol hapus --}}
+          <div class="flex items-center gap-3">
+            <span class="text-gray-800 font-semibold">Rp {{ number_format($s['price'], 0, ',', '.') }}</span>
+            
+            <form action="{{ route('projects.cart.remove') }}" method="POST" class="inline-block">
+              @csrf
+              <input type="hidden" name="kind" value="service">
+              <input type="hidden" name="row_id" value="{{ $s['row_id'] }}">
+              <button type="submit" class="text-xs px-2 py-1 rounded bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors duration-150">
+                Hapus
+              </button>
+            </form>
+          </div>
+        </div>
+      @empty
+        <div class="text-center py-6 text-gray-500">
+          <svg class="w-8 h-8 mx-auto mb-2 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clip-rule="evenodd"></path>
+          </svg>
+          <p class="text-sm">Belum ada service.</p>
+        </div>
+      @endforelse
+    </div>
   </div>
 </div>
-{{-- ========== CART ========== --}}
-@include('projects.partials._cart', ['cart' => $cart])
+
 {{-- ========== RINGKASAN & PEMBAYARAN ========== --}}
 @php
   $serviceTotal = collect($services)->sum(fn($s)=> (float)($s['price'] ?? 0));
@@ -303,15 +302,31 @@ $leftoverTotal = collect($lefts)->sum(function($r){
           <span class="font-medium text-gray-900">{{ $currency($sum['total_materials']) }}</span>
         </div>
         <div class="flex items-center justify-between mt-2">
-  <span class="text-gray-800">Total Potongan Sisa</span>
-  <span class="font-semibold text-gray-900">
-    Rp {{ number_format($leftoverTotal,0,',','.') }}
-  </span>
-</div>
+          <span class="text-gray-800">Total Potongan Sisa</span>
+          <span class="font-semibold text-gray-900">
+            Rp {{ number_format($leftoverTotal,0,',','.') }}
+          </span>
+        </div>
         <div class="flex items-center justify-between">
           <span class="text-gray-700">Total Jasa</span>
           <span class="font-medium text-gray-900">{{ $currency($sum['total_services']) }}</span>
         </div>
+        
+        <!-- SUBTOTAL SEBELUM DISKON -->
+        <div class="flex items-center justify-between border-t pt-2 mt-2">
+          <span class="font-medium text-gray-700">Subtotal</span>
+          <span class="font-medium text-gray-800" id="subtotal-amount" data-subtotal="{{ (float)$sum['grand_total'] }}">
+            {{ $currency($sum['grand_total']) }}
+          </span>
+        </div>
+        
+        <!-- DISKON -->
+        <div class="flex items-center justify-between">
+          <span class="text-red-600">Diskon</span>
+          <span class="text-red-600" id="discount-amount">Rp 0</span>
+        </div>
+        
+        <!-- GRAND TOTAL SETELAH DISKON -->
         <div class="flex items-center justify-between border-t pt-2 mt-2">
           <span class="font-semibold text-gray-800">Grand Total</span>
           <span class="font-semibold text-gray-900" id="grand-total" data-grand="{{ (float)$sum['grand_total'] }}">
@@ -334,9 +349,29 @@ $leftoverTotal = collect($lefts)->sum(function($r){
           <input type="number" name="customer_id" class="w-full px-3 py-2 border rounded-lg"
                  value="{{ session('project.customer.id') }}">
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        
+        <!-- DISKON & CATATAN -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs text-gray-600 mb-1">Metode</label>
+            <label class="block text-xs text-gray-600 mb-1">Diskon Total</label>
+            <input type="number" name="discount" id="discount-input" step="0.01" min="0" 
+                   class="w-full px-3 py-2 border rounded-lg" 
+                   placeholder="Masukkan nilai diskon">
+            <p class="text-xs text-gray-500 mt-1">Masukkan nilai diskon dalam rupiah</p>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Catatan</label>
+            <textarea name="notes" rows="3" 
+                      class="w-full px-3 py-2 border rounded-lg resize-both" 
+                      style="min-height: 76px; max-height: 200px;"
+                      placeholder="Catatan tambahan untuk proyek ini..."></textarea>
+          </div>
+        </div>
+        
+        <!-- METODE PEMBAYARAN (TANPA REF/NO) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Metode Pembayaran</label>
             <select name="pay_method" class="w-full px-3 py-2 border rounded-lg" required>
               <option value="CASH">CASH</option>
               <option value="CARD">CARD</option>
@@ -347,11 +382,7 @@ $leftoverTotal = collect($lefts)->sum(function($r){
           <div>
             <label class="block text-xs text-gray-600 mb-1">Nominal Bayar</label>
             <input type="number" name="pay_amount" id="pay-amount" step="0.01" min="0"
-                   class="w-full px-3 py-2 border rounded-lg" required placeholder="0">
-          </div>
-          <div>
-            <label class="block text-xs text-gray-600 mb-1">Ref/No (opsional)</label>
-            <input type="text" name="pay_ref" class="w-full px-3 py-2 border rounded-lg" placeholder="No ref / catatan">
+                   class="w-full px-3 py-2 border rounded-lg" required placeholder="Masukkan jumlah pembayaran">
           </div>
         </div>
 
@@ -370,22 +401,49 @@ $leftoverTotal = collect($lefts)->sum(function($r){
   </div>
 </div>
 
-{{-- JS sederhana untuk kembalian --}}
+{{-- JS untuk kalkulasi diskon dan kembalian --}}
 <script>
   (function(){
-    const grand = Number(document.getElementById('grand-total')?.dataset?.grand || 0);
-    const input = document.getElementById('pay-amount');
-    const out   = document.getElementById('pay-change');
+    const subtotalElement = document.getElementById('subtotal-amount');
+    const discountInput = document.getElementById('discount-input');
+    const discountDisplay = document.getElementById('discount-amount');
+    const grandTotalElement = document.getElementById('grand-total');
+    const payInput = document.getElementById('pay-amount');
+    const changeOutput = document.getElementById('pay-change');
+    
+    const subtotal = Number(subtotalElement?.dataset?.subtotal || 0);
+    
     function fmt(n){ return 'Rp ' + (Math.round(n)).toLocaleString('id-ID'); }
-    function upd(){
-      const paid = Number(input.value || 0);
-      const change = paid - grand;
-      out.textContent = fmt(change > 0 ? change : 0);
+    
+    function updateTotals(){
+      const discountValue = Number(discountInput?.value || 0);
+      const grandTotal = Math.max(0, subtotal - discountValue);
+      
+      // Update tampilan
+      if (discountDisplay) discountDisplay.textContent = fmt(discountValue);
+      if (grandTotalElement) {
+        grandTotalElement.textContent = fmt(grandTotal);
+        grandTotalElement.dataset.grand = grandTotal;
+      }
+      
+      // Update kembalian
+      updateChange();
     }
-    if (input) { input.addEventListener('input', upd); upd(); }
+    
+    function updateChange(){
+      const grandTotal = Number(grandTotalElement?.dataset?.grand || 0);
+      const paid = Number(payInput?.value || 0);
+      const change = Math.max(0, paid - grandTotal);
+      if (changeOutput) changeOutput.textContent = fmt(change);
+    }
+    
+    // Event listeners
+    if (discountInput) discountInput.addEventListener('input', updateTotals);
+    if (payInput) payInput.addEventListener('input', updateChange);
+    
+    // Initial update
+    updateTotals();
   })();
-
-
 </script>
 
 

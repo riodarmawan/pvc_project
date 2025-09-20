@@ -5,15 +5,14 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class StockTransferController extends Controller
 {
     private const TBL_QUANTS = 'stock_quants';
 
     /**
-     * Halaman form transfer.
-     * - Owner: pilih cabang asal/tujuan.
-     * - Kasir/pegawai yang punya default_branch_id tetap bisa memilih cabang lain (independen).
+     * Halaman form transfer - DENGAN SUPPORT DISPLAY STOK DI DROPDOWN
      */
     public function create()
     {
@@ -22,32 +21,139 @@ class StockTransferController extends Controller
             ->orderBy('name')
             ->get();
 
-        $products = DB::table('products')
-            ->select('id', 'sku', 'name', 'uom_id')
-            ->where('is_active', 1)
-            ->orderBy('sku')
-            ->limit(1500)
-            ->get();
-
+        // Tidak load products di sini - akan diload via AJAX berdasarkan cabang
         return view('stock.transfer.create', [
             'branches' => $branches,
-            'products' => $products,
         ]);
+    }
+/**
+ * Tampilkan history transfer dengan filter rentang waktu dan pagination
+ */
+public function index(Request $request)
+{
+    // Default rentang waktu (hari ini)
+    $dateFrom = $request->input('date_from', now()->format('Y-m-d'));
+    $dateTo = $request->input('date_to', now()->format('Y-m-d'));
+    
+    // Validasi format tanggal
+    try {
+        $dateFromParsed = Carbon::createFromFormat('Y-m-d', $dateFrom)->startOfDay();
+        $dateToParsed = Carbon::createFromFormat('Y-m-d', $dateTo)->endOfDay();
+    } catch (\Exception $e) {
+        $dateFromParsed = now()->startOfDay();
+        $dateToParsed = now()->endOfDay();
+        $dateFrom = $dateFromParsed->format('Y-m-d');
+        $dateTo = $dateToParsed->format('Y-m-d');
+    }
+    
+    // Query transfer dengan join cabang dan pagination
+    $transfers = DB::table('stock_transfers as t')
+        ->leftJoin('branches as bf', 'bf.id', '=', 't.branch_from_id')
+        ->leftJoin('branches as bt', 'bt.id', '=', 't.branch_to_id')
+        ->whereBetween('t.created_at', [$dateFromParsed, $dateToParsed])
+        ->select(
+            't.id',
+            't.status',
+            't.created_at',
+            't.shipped_at',
+            't.received_at',
+            't.notes',
+            'bf.name as branch_from_name',
+            'bt.name as branch_to_name',
+            DB::raw('(SELECT COUNT(*) FROM stock_transfer_lines WHERE transfer_id = t.id) as total_items'),
+            DB::raw('(SELECT SUM(qty) FROM stock_transfer_lines WHERE transfer_id = t.id) as total_qty')
+        )
+        ->orderBy('t.created_at', 'desc')
+        ->paginate(15)
+        ->withQueryString(); // Mempertahankan query parameter saat pagination
+    
+    return view('stock.transfer.index', [
+        'transfers' => $transfers,
+        'dateFrom' => $dateFrom,
+        'dateTo' => $dateTo,
+        'totalTransfers' => $transfers->total()
+    ]);
+}
+
+    /**
+     * AJAX: Mendapatkan produk dengan stok berdasarkan cabang untuk dropdown.
+     */
+    public function getProductsWithStock(Request $request)
+    {
+        try {
+            $branchId = (int) $request->input('branch_id');
+            
+            if (!$branchId) {
+                return response()->json(['error' => 'Branch ID harus diisi'], 400);
+            }
+            
+            // Ambil semua lokasi untuk cabang ini
+            $locations = DB::table('stock_locations')
+                ->where('branch_id', $branchId)
+                ->pluck('id')
+                ->toArray();
+            
+            if (empty($locations)) {
+                // Auto-create default location
+                $locationId = DB::table('stock_locations')->insertGetId([
+                    'branch_id' => $branchId,
+                    'code' => 'STORE',
+                    'name' => 'Gudang Utama',
+                    'type' => 'STORE',
+                    'created_at' => now()
+                ]);
+                $locations = [$locationId];
+            }
+            
+            // Ambil semua produk aktif dengan total stok per cabang
+            $products = DB::table('products as p')
+                ->join('uoms as u', 'u.id', '=', 'p.uom_id')
+                ->leftJoin('stock_quants as sq', function($join) use ($locations) {
+                    $join->on('sq.product_id', '=', 'p.id')
+                         ->whereIn('sq.location_id', $locations);
+                })
+                ->where('p.is_active', 1)
+                ->select(
+                    'p.id',
+                    'p.sku', 
+                    'p.name',
+                    'u.code as uom',
+                    DB::raw('COALESCE(SUM(sq.qty), 0) as total_stock')
+                )
+                ->groupBy('p.id', 'p.sku', 'p.name', 'u.code')
+                ->orderBy('p.sku')
+                ->get();
+            
+            // Format data untuk dropdown dengan stok di ujung
+            $formattedProducts = $products->map(function($product) {
+                $stockDisplay = number_format($product->total_stock, 2);
+                $displayText = "[{$product->sku}] {$product->name} ({$product->uom}) ({$stockDisplay})";
+                
+                return [
+                    'id' => $product->id,
+                    'sku' => $product->sku,
+                    'name' => $product->name,
+                    'uom' => $product->uom,
+                    'stock' => (float) $product->total_stock,
+                    'display_text' => $displayText
+                ];
+            });
+            
+            return response()->json([
+                'products' => $formattedProducts,
+                'branch_id' => $branchId
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Get Products With Stock Error: ' . $e->getMessage());
+            return response()->json(['error' => 'Gagal mengambil data produk'], 500);
+        }
     }
 
     /**
-     * Proses transfer stok antar cabang (langsung selesai).
-     *
-     * Request payload (contoh):
-     * branch_from_id: 1
-     * branch_to_id: 2
-     * notes: "Mutasi antar cabang"
-     * items: [
-     *   ['product_id' => 45, 'qty' => '5'],
-     *   ['product_id' => 56, 'qty' => '12.5'],
-     * ]
+     * Proses transfer stok antar cabang multi-item (langsung selesai).
      */
-        public function store(Request $request)
+    public function store(Request $request)
     {
         // Normalisasi angka qty (dukung koma)
         $items = (array) $request->input('items', []);
@@ -76,9 +182,7 @@ class StockTransferController extends Controller
         $notes    = $data['notes'] ?? null;
         $items    = $data['items'];
 
-        // ===== PERUBAHAN LOGIKA DIMULAI DI SINI =====
-        // Kita tidak lagi menentukan lokasi asal di awal, karena setiap produk bisa berada di lokasi berbeda.
-        // Penentuan lokasi tujuan tetap sama.
+        // Penentuan lokasi tujuan
         $locToId = $this->ensurePrimaryLocationId($toId);
 
         // Ambil data master cabang (untuk audit)
@@ -120,8 +224,7 @@ class StockTransferController extends Controller
                     throw new \RuntimeException("Produk $pid tidak ditemukan.");
                 }
 
-                // ===== LOGIKA PENCARIAN STOK ASAL YANG BARU =====
-
+                // ===== LOGIKA PENCARIAN STOK ASAL =====
                 $fromQuant = null;
                 $locFromId = null;
 
@@ -141,7 +244,7 @@ class StockTransferController extends Controller
                     }
                 }
 
-                // Jika setelah dicari di semua lokasi tetap tidak ada yang cukup, baru lempar error
+                // Jika setelah dicari di semua lokasi tetap tidak ada yang cukup
                 if (!$fromQuant) {
                     // Hitung total stok di cabang asal untuk pesan error yang lebih informatif
                     $totalStockInBranch = DB::table(self::TBL_QUANTS)
@@ -157,9 +260,6 @@ class StockTransferController extends Controller
                 $fromOld = (float) $fromQuant->qty;
                 $fromNew = round($fromOld - $qty, 2);
                 $this->setQuantDirect($pid, $locFromId, $fromNew, $fromQuant);
-                
-                // ===== SELESAI PERUBAHAN LOGIKA PENCARIAN =====
-
 
                 // Stock move OUT (asal)
                 DB::table('stock_moves')->insert([
@@ -233,27 +333,299 @@ class StockTransferController extends Controller
             }
 
             // Audit header
-            // (Tidak ada perubahan di sini)
-            // ...
+            DB::table('audit_logs')->insert([
+                'event'    => 'STOCK_TRANSFER_HEADER',
+                'user_id'  => $userId ?: null,
+                'ref_type' => 'TRANSFER',
+                'ref_id'   => $transferId,
+                'payload'  => json_encode([
+                    'transfer_id'  => $transferId,
+                    'from_branch'  => ['id'=>$branchFrom->id, 'name'=>$branchFrom->name],
+                    'to_branch'    => ['id'=>$branchTo->id,   'name'=>$branchTo->name],
+                    'notes'        => $notes,
+                    'total_items'  => count($items),
+                    'items'        => $items
+                ], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+            ]);
             
             return $transferId;
         });
 
-        return redirect()->back()->with('success', "Transfer stok berhasil diproses (ID: {$result}).");
+        // Redirect ke surat jalan
+// Di fungsi store(), ubah redirect menjadi:
+return redirect()->route('stock.transfer.index')
+    ->with('success', "Transfer stok berhasil diproses (ID: {$result}) untuk " . count($items) . " item. Surat jalan dapat dicetak dari history.");
+
     }
 
-
     /**
-     * Dapatkan lokasi utama untuk cabang:
-     * - Prioritas: type/code = 'AVAILABLE'
-     * - Fallback:  type/code = 'STORE'
-     * - Jika tak ada satupun → buat lokasi 'AVAILABLE'
+     * Print surat jalan optimized untuk Epson LX-310.
      */
     /**
-     * Dapatkan lokasi utama untuk cabang:
-     * - [DIPERBARUI] Prioritas: type/code = 'STORE'
-     * - Fallback:   type/code = 'AVAILABLE'
-     * - Jika tak ada satupun → buat lokasi 'AVAILABLE'
+ * Print surat jalan optimized untuk Epson LX-310 - FIXED untuk OWNER LOGIN
+ */
+public function printDeliveryNote($id)
+{
+    $id = (int) $id;
+    
+    // Ambil data transfer TANPA join ke users (karena owner login)
+    $transfer = DB::table('stock_transfers as t')
+        ->leftJoin('branches as bf', 'bf.id', '=', 't.branch_from_id')
+        ->leftJoin('branches as bt', 'bt.id', '=', 't.branch_to_id')
+        ->where('t.id', $id)
+        ->select(
+            't.*',
+            'bf.name as branch_from_name', 'bf.address as branch_from_address',
+            'bt.name as branch_to_name', 'bt.address as branch_to_address',
+            // ✅ SET NAMA OWNER LANGSUNG tanpa join ke users
+            DB::raw('"OWNER/SISTEM" as created_by_name')
+        )
+        ->first();
+    
+    if (!$transfer) {
+        abort(404, 'Transfer tidak ditemukan');
+    }
+    
+    // Ambil detail items
+    $items = DB::table('stock_transfer_lines as tl')
+        ->join('products as p', 'p.id', '=', 'tl.product_id')
+        ->join('uoms as u', 'u.id', '=', 'tl.uom_id')
+        ->where('tl.transfer_id', $id)
+        ->select('tl.*', 'p.sku', 'p.name', 'u.code as uom')
+        ->orderBy('p.sku')
+        ->get();
+    
+    // Generate nomor surat jalan berbasis ID transfer
+    $deliveryNumber = 'SJ-' . date('ymd') . '-' . str_pad($id, 4, '0', STR_PAD_LEFT);
+    
+    // Format tanggal
+    $transferDate = date('d/m/Y H:i', strtotime($transfer->created_at));
+    $printDate = date('d/m/Y H:i');
+    
+    // Dynamic scaling untuk dot matrix berdasarkan jumlah items
+    $itemCount = count($items);
+    $baseFont = ($itemCount > 15) ? 9 : 10;
+    $tableFont = ($itemCount > 15) ? 8 : 9;
+    $smallFont = ($itemCount > 15) ? 7 : 8;
+    $mediumFont = ($itemCount > 15) ? 10 : 11;
+    $largeFont = ($itemCount > 15) ? 11 : 12;
+    $paddingSize = ($itemCount > 15) ? 1 : 2;
+    $marginSize = ($itemCount > 25) ? '0.1in' : (($itemCount > 15) ? '0.15in' : '0.2in');
+    
+    // Generate HTML optimized untuk Epson LX-310
+    $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
+    $html .= '<title>Surat Jalan ' . $deliveryNumber . '</title>';
+    $html .= '<style>
+        @page { 
+            size: 10in 14in; 
+            margin: '.$marginSize.'; 
+        }
+        body { 
+            font-family: "Courier New", "Draft", monospace; 
+            font-size: '.$baseFont.'px; 
+            line-height: 1.1; 
+            margin: 0; 
+            padding: 0; 
+            color: #000;
+            letter-spacing: 0.5px;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            font-size: '.$tableFont.'px; 
+            font-family: "Courier New", monospace; 
+        }
+        th, td { 
+            padding: '.$paddingSize.'px 3px; 
+            text-align: left; 
+            border-bottom: 1px solid #000; 
+            vertical-align: top;
+            word-break: break-word;
+        }
+        th { 
+            font-weight: bold; 
+            border-bottom: 2px solid #000; 
+            text-transform: uppercase;
+            background-color: #f0f0f0;
+        }
+        .right { text-align: right; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .large { font-size: '.$largeFont.'px; font-weight: bold; }
+        .medium { font-size: '.$mediumFont.'px; font-weight: bold; }
+        .small { font-size: '.$smallFont.'px; }
+        .header-company { text-align: center; }
+        .line-separator { 
+            border-top: 2px solid #000; 
+            margin: '.($paddingSize * 2).'px 0; 
+        }
+        .dotted-line { 
+            border-top: 1px dotted #000; 
+            margin: '.$paddingSize.'px 0; 
+        }
+        .signature-box {
+            border: 2px solid #000;
+            padding: '.($paddingSize * 3).'px;
+            margin-top: '.($paddingSize * 4).'px;
+        }
+        
+        .dot-matrix-text {
+            font-family: "Courier New", monospace;
+            letter-spacing: 0.5px;
+            font-weight: normal;
+        }
+        
+        .dot-matrix-bold {
+            font-family: "Courier New", monospace;
+            font-weight: bold;
+            letter-spacing: 0.3px;
+        }
+        
+        @media print { 
+            body { 
+                margin: 0; 
+                -webkit-print-color-adjust: exact;
+            }
+            .no-print { display: none; }
+        }
+    </style></head><body>';
+    
+    // HEADER SURAT JALAN
+    $html .= '<table style="border: none; margin-bottom: '.($paddingSize * 2).'px;">';
+    $html .= '<tr><td style="border: none; padding: '.$paddingSize.'px;" class="header-company dot-matrix-bold">';
+    $html .= '<div class="large">SURAT JALAN TRANSFER STOK</div>';
+    $html .= '<div class="medium">'.strtoupper(e($transfer->branch_from_name ?? 'PERUSAHAAN')).'</div>';
+    $html .= '<div class="small dot-matrix-text">Transfer Barang Antar Cabang</div>';
+    $html .= '</td></tr></table>';
+    
+    // GARIS PEMISAH
+    $html .= '<div class="line-separator"></div>';
+    
+    // INFO TRANSFER
+    $html .= '<table style="border: none; margin-bottom: '.($paddingSize * 2).'px;">';
+    $html .= '<tr>';
+    $html .= '<td style="border: none; width: 50%; padding: 1px;" class="dot-matrix-text">';
+    $html .= '<div class="medium dot-matrix-bold">No. Transfer: ' . $deliveryNumber . '</div>';
+    $html .= '<div>Tanggal: ' . $transferDate . '</div>';
+    $html .= '<div>Status: <span class="bold">'.strtoupper($transfer->status ?? 'CLOSED').'</span></div>';
+    $html .= '</td>';
+    $html .= '<td style="border: none; text-align: right; padding: 1px;" class="dot-matrix-text">';
+    $html .= '<div class="bold">Petugas Transfer:</div>';
+    $html .= '<div>'.e($transfer->created_by_name).'</div>';
+    $html .= '</td>';
+    $html .= '</tr></table>';
+    
+    // INFO CABANG
+    $html .= '<table style="border: 1px solid #000; margin: '.($paddingSize * 2).'px 0;" class="dot-matrix-text">';
+    $html .= '<tr>';
+    $html .= '<td style="border-right: 1px solid #000; width: 50%; padding: '.($paddingSize * 2).'px;" class="dot-matrix-bold">';
+    $html .= '<div class="medium">CABANG ASAL</div>';
+    $html .= '<div class="dot-matrix-text">'.e($transfer->branch_from_name ?? '').'</div>';
+    if (!empty($transfer->branch_from_address)) {
+        $html .= '<div class="small dot-matrix-text">'.e($transfer->branch_from_address).'</div>';
+    }
+    $html .= '</td>';
+    $html .= '<td style="width: 50%; padding: '.($paddingSize * 2).'px;" class="dot-matrix-bold">';
+    $html .= '<div class="medium">CABANG TUJUAN</div>';
+    $html .= '<div class="dot-matrix-text">'.e($transfer->branch_to_name ?? '').'</div>';
+    if (!empty($transfer->branch_to_address)) {
+        $html .= '<div class="small dot-matrix-text">'.e($transfer->branch_to_address).'</div>';
+    }
+    $html .= '</td>';
+    $html .= '</tr></table>';
+    
+    // GARIS PEMISAH
+    $html .= '<div class="dotted-line"></div>';
+    
+    // TABEL BARANG
+    $html .= '<table class="dot-matrix-text">';
+    $html .= '<thead><tr>';
+    $html .= '<th style="width:8%" class="center">NO</th>';
+    $html .= '<th style="width:20%">SKU</th>';
+    $html .= '<th style="width:45%">NAMA BARANG</th>';
+    $html .= '<th style="width:12%" class="center">QTY</th>';
+    $html .= '<th style="width:15%" class="center">SATUAN</th>';
+    $html .= '</tr></thead><tbody>';
+    
+    $no = 1;
+    $totalQty = 0;
+    
+    foreach ($items as $item) {
+        $html .= '<tr>';
+        $html .= '<td class="center">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
+        $html .= '<td class="dot-matrix-bold">'.e($item->sku).'</td>';
+        $html .= '<td>'.e($item->name).'</td>';
+        $html .= '<td class="center bold">'.number_format($item->qty, ($item->qty == (int)$item->qty ? 0 : 2)).'</td>';
+        $html .= '<td class="center">'.strtoupper(e($item->uom)).'</td>';
+        $html .= '</tr>';
+        
+        $totalQty += $item->qty;
+        $no++;
+    }
+    
+    $html .= '</tbody></table>';
+    
+    // RINGKASAN
+    $html .= '<table style="border: 2px solid #000; margin-top: '.($paddingSize * 3).'px;" class="dot-matrix-bold">';
+    $html .= '<tr><td style="border: none; text-align: center; padding: '.($paddingSize * 2).'px;">';
+    $html .= '<div class="medium">RINGKASAN TRANSFER</div>';
+    $html .= '<div class="dot-matrix-text" style="margin: '.$paddingSize.'px 0;">Total Item: <span class="bold">'.count($items).' jenis barang</span></div>';
+    $html .= '<div class="dot-matrix-text">Total Quantity: <span class="bold">'.number_format($totalQty, 2).'</span></div>';
+    $html .= '</td></tr></table>';
+    
+    // CATATAN
+    if (!empty($transfer->notes)) {
+        $html .= '<table style="border: 1px solid #000; margin-top: '.($paddingSize * 2).'px;" class="dot-matrix-text">';
+        $html .= '<tr><td style="border: none; padding: '.($paddingSize * 2).'px;">';
+        $html .= '<div class="bold">CATATAN:</div>';
+        $html .= '<div class="small">'.nl2br(e($transfer->notes)).'</div>';
+        $html .= '</td></tr></table>';
+    }
+    
+    // SIGNATURE BOXES
+    $html .= '<table style="border: none; margin-top: '.($paddingSize * 4).'px;" class="dot-matrix-text">';
+    $html .= '<tr>';
+    $html .= '<td style="border: 2px solid #000; width: 33%; padding: '.($paddingSize * 3).'px; text-align: center;">';
+    $html .= '<div class="bold">PENGIRIM</div>';
+    $html .= '<div style="margin: '.($paddingSize * 8).'px 0 '.$paddingSize.'px 0;">________________</div>';
+    $html .= '<div class="small">Tanda Tangan & Nama</div>';
+    $html .= '</td>';
+    $html .= '<td style="border: none; width: 34%;"></td>';
+    $html .= '<td style="border: 2px solid #000; width: 33%; padding: '.($paddingSize * 3).'px; text-align: center;">';
+    $html .= '<div class="bold">PENERIMA</div>';
+    $html .= '<div style="margin: '.($paddingSize * 8).'px 0 '.$paddingSize.'px 0;">________________</div>';
+    $html .= '<div class="small">Tanda Tangan & Nama</div>';
+    $html .= '</td>';
+    $html .= '</tr></table>';
+    
+    // STATUS PENERIMAAN
+    $html .= '<table style="border: 2px solid #000; margin-top: '.($paddingSize * 3).'px;" class="dot-matrix-text">';
+    $html .= '<tr><td style="border: none; padding: '.($paddingSize * 2).'px;">';
+    $html .= '<div class="bold center">STATUS PENERIMAAN BARANG</div>';
+    $html .= '<div style="margin: '.$paddingSize.'px 0;">';
+    $html .= '[ &nbsp; ] Diterima Lengkap dan Sesuai<br>';
+    $html .= '[ &nbsp; ] Ada Kekurangan / Selisih<br>';
+    $html .= '[ &nbsp; ] Ada Kerusakan / Cacat';
+    $html .= '</div>';
+    $html .= '<div class="small">Catatan Penerima: ________________________________</div>';
+    $html .= '</td></tr></table>';
+    
+    // FOOTER
+    $html .= '<div style="margin-top: '.($paddingSize * 4).'px; border-top: 1px solid #000; padding-top: '.$paddingSize.'px;" class="small dot-matrix-text center">';
+    $html .= 'Dokumen ini dicetak pada: '.$printDate.' | Ref: '.$deliveryNumber;
+    $html .= '</div>';
+    
+    // AUTO PRINT SCRIPT
+    $html .= '<script>window.print();</script>';
+    $html .= '</body></html>';
+    
+    return response($html);
+}
+
+
+    /**
+     * Dapatkan lokasi utama untuk cabang dengan prioritas STORE first.
      */
     private function ensurePrimaryLocationId(int $branchId): int
     {
@@ -263,8 +635,6 @@ class StockTransferController extends Controller
                 $q->whereIn('type', ['STORE', 'AVAILABLE'])
                   ->orWhereIn('code', ['STORE', 'AVAILABLE']);
             })
-            // ===== PERUBAHAN DI BARIS INI =====
-            // Logika dibalik untuk memprioritaskan 'STORE' terlebih dahulu.
             ->orderByRaw("FIELD(type, 'STORE', 'AVAILABLE')") 
             ->first();
 
@@ -272,15 +642,15 @@ class StockTransferController extends Controller
             return (int) $loc->id;
         }
 
-        // Buat default AVAILABLE jika belum ada lokasi apa pun
+        // Buat default STORE jika belum ada lokasi apa pun
         return (int) DB::table('stock_locations')->insertGetId([
             'branch_id' => $branchId,
-            'code'      => 'AVAILABLE',
-            'name'      => 'Available Stock',
-            'type'      => 'AVAILABLE',
+            'code'      => 'STORE',
+            'name'      => 'Gudang Utama',
+            'type'      => 'STORE',
+            'created_at' => now(),
         ]);
     }
-
 
     /**
      * Set qty langsung pada baris quant (update / insert).
@@ -311,7 +681,3 @@ class StockTransferController extends Controller
         return (float) $s;
     }
 }
-
-
-
-
