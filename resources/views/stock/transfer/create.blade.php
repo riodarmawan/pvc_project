@@ -519,67 +519,40 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // LOAD PRODUCTS WITH STOCK VIA AJAX
-    function loadProductsWithStock(branchId) {
-        if (!branchId) {
-            availableProducts = [];
-            updateAllProductDropdowns();
-            addItemBtn.disabled = true;
-            return;
-        }
-        
-        // Show loading
-        loadingProducts.classList.remove('hidden');
-        addItemBtn.disabled = true;
-        
-        // Clear existing product dropdowns
+function loadProductsWithStock(branchId) {
+    if (!branchId) {
         availableProducts = [];
         updateAllProductDropdowns();
-        
-        // Fetch products with stock via AJAX
-        fetch(`{{ route('api.products-with-stock') }}?branch_id=${branchId}`, {
-            method: 'GET',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('✅ Products loaded:', data);
-            
-            if (data.error) {
-                alert('Error: ' + data.error);
-                return;
-            }
-            
-            // Store products with stock info
-            availableProducts = data.products || [];
-            
-            // Update all product dropdowns
-            updateAllProductDropdowns();
-            
-            // Enable add item button
-            addItemBtn.disabled = false;
-            
-            // Hide loading
-            loadingProducts.classList.add('hidden');
-        })
-        .catch(error => {
-            console.error('💥 Load Products Error:', error);
-            alert('Gagal mengambil data produk: ' + error.message);
-            
-            availableProducts = [];
-            updateAllProductDropdowns();
-            addItemBtn.disabled = true;
-            loadingProducts.classList.add('hidden');
-        });
+        addItemBtn.disabled = true;
+        return;
     }
+    
+    // Show loading
+    loadingProducts.classList.remove('hidden');
+    addItemBtn.disabled = true;
+    
+    // Clear existing product dropdowns
+    availableProducts = [];
+    updateAllProductDropdowns();
+    
+    // ✅ GANTI: Ambil data dari window object (server-side data)
+    const branchProducts = window.productsByBranch[branchId] || [];
+    
+    console.log('✅ Products loaded from server-side data:', branchProducts);
+    
+    // Store products with stock info
+    availableProducts = branchProducts;
+    
+    // Update all product dropdowns
+    updateAllProductDropdowns();
+    
+    // Enable add item button
+    addItemBtn.disabled = false;
+    
+    // Hide loading
+    loadingProducts.classList.add('hidden');
+}
+
     
     // UPDATE ALL PRODUCT DROPDOWNS WITH STOCK
     function updateAllProductDropdowns() {
@@ -934,4 +907,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<script>
+// ✅ Embed data dari server ke JavaScript
+window.productsByBranch = @json($productsByBranch);
+window.branches = @json($branches);
+
+console.log('📦 Products by branch loaded:', window.productsByBranch);
+</script>
+
 @endsection

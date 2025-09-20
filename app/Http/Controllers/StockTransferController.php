@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-
+use App\Models\Branch;
 class StockTransferController extends Controller
 {
     private const TBL_QUANTS = 'stock_quants';
@@ -14,18 +14,66 @@ class StockTransferController extends Controller
     /**
      * Halaman form transfer - DENGAN SUPPORT DISPLAY STOK DI DROPDOWN
      */
-    public function create()
-    {
-        $branches = DB::table('branches')
-            ->where('is_active', 1)
-            ->orderBy('name')
-            ->get();
-
-        // Tidak load products di sini - akan diload via AJAX berdasarkan cabang
-        return view('stock.transfer.create', [
-            'branches' => $branches,
-        ]);
+public function create()
+{
+    $branches = Branch::all();
+    
+    // ✅ Ambil semua produk dengan stok per branch
+    $productsByBranch = [];
+    foreach ($branches as $branch) {
+        $productsByBranch[$branch->id] = $this->getProductsWithStockForBranch($branch->id);
     }
+    
+    return view('stock.transfer.create', compact('branches', 'productsByBranch'));
+}
+
+private function getProductsWithStockForBranch($branchId)
+{
+    // Ambil lokasi untuk branch ini
+    $locations = DB::table('stock_locations')
+        ->where('branch_id', $branchId)
+        ->pluck('id')
+        ->toArray();
+    
+    if (empty($locations)) {
+        return [];
+    }
+    
+    // Ambil produk dengan stok
+    $products = DB::table('products as p')
+        ->join('uoms as u', 'u.id', '=', 'p.uom_id')
+        ->leftJoin('stock_quants as sq', function($join) use ($locations) {
+            $join->on('sq.product_id', '=', 'p.id')
+                 ->whereIn('sq.location_id', $locations);
+        })
+        ->where('p.is_active', 1)
+        ->select(
+            'p.id',
+            'p.sku', 
+            'p.name',
+            'u.code as uom',
+            DB::raw('COALESCE(SUM(sq.qty), 0) as total_stock')
+        )
+        ->groupBy('p.id', 'p.sku', 'p.name', 'u.code')
+        ->having(DB::raw('COALESCE(SUM(sq.qty), 0)'), '>', 0)
+        ->orderBy('p.sku')
+        ->get();
+    
+    return $products->map(function($product) {
+        $stockDisplay = number_format($product->total_stock, 0);
+        $displayText = "[{$product->sku}] {$product->name} ({$product->uom}) ({$stockDisplay})";
+        
+        return [
+            'id' => $product->id,
+            'sku' => $product->sku,
+            'name' => $product->name,
+            'uom' => $product->uom,
+            'stock' => (int) $product->total_stock,
+            'display_text' => $displayText
+        ];
+    });
+}
+
 /**
  * Tampilkan history transfer dengan filter rentang waktu dan pagination
  */
