@@ -144,17 +144,6 @@
   </button>
   
   <div class="space-y-1 mt-2 ml-2 hidden">
-    <a href="{{ route('products.create') }}"
-       class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
-              dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
-      Buat Produk
-    </a>
-    
-    <a href="{{ route('suppliers.create') }}"
-       class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
-              dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
-      Buat Supplier
-    </a>
         <a href="{{ route('admin.products.import.form') }}"
        class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
               dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">

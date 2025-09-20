@@ -68,15 +68,19 @@
   const cat = document.getElementById('cat_id');
   if (!form) return;
 
-  let t;
-  q?.addEventListener('input', () => {
-    clearTimeout(t);
-    t = setTimeout(() => form.submit(), 450);
+  // Submit hanya ketika menekan Enter
+  q?.addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault(); // Mencegah submit default
+      form.submit(); // Submit manual
+    }
   });
 
+  // Tetap submit ketika kategori berubah
   cat?.addEventListener('change', () => form.submit());
 })();
 </script>
+
 
 <script src="{{ asset('js/pos.js') }}" defer></script>
 @endsection
