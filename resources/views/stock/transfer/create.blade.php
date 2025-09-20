@@ -536,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateAllProductDropdowns();
         
         // Fetch products with stock via AJAX
-        fetch(`http://43.173.29.242:8080/api/products-with-stock?branch_id=${branchId}`, {
+        fetch(`{{ route('api.products-with-stock') }}?branch_id=${branchId}`, {
             method: 'GET',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',

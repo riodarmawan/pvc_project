@@ -74,81 +74,80 @@ public function index(Request $request)
         'totalTransfers' => $transfers->total()
     ]);
 }
-
-    /**
-     * AJAX: Mendapatkan produk dengan stok berdasarkan cabang untuk dropdown.
-     */
-    public function getProductsWithStock(Request $request)
-    {
-        try {
-            $branchId = (int) $request->input('branch_id');
-            
-            if (!$branchId) {
-                return response()->json(['error' => 'Branch ID harus diisi'], 400);
-            }
-            
-            // Ambil semua lokasi untuk cabang ini
-            $locations = DB::table('stock_locations')
-                ->where('branch_id', $branchId)
-                ->pluck('id')
-                ->toArray();
-            
-            if (empty($locations)) {
-                // Auto-create default location
-                $locationId = DB::table('stock_locations')->insertGetId([
-                    'branch_id' => $branchId,
-                    'code' => 'STORE',
-                    'name' => 'Gudang Utama',
-                    'type' => 'STORE',
-                    'created_at' => now()
-                ]);
-                $locations = [$locationId];
-            }
-            
-            // Ambil semua produk aktif dengan total stok per cabang
-            $products = DB::table('products as p')
-                ->join('uoms as u', 'u.id', '=', 'p.uom_id')
-                ->leftJoin('stock_quants as sq', function($join) use ($locations) {
-                    $join->on('sq.product_id', '=', 'p.id')
-                         ->whereIn('sq.location_id', $locations);
-                })
-                ->where('p.is_active', 1)
-                ->select(
-                    'p.id',
-                    'p.sku', 
-                    'p.name',
-                    'u.code as uom',
-                    DB::raw('COALESCE(SUM(sq.qty), 0) as total_stock')
-                )
-                ->groupBy('p.id', 'p.sku', 'p.name', 'u.code')
-                ->orderBy('p.sku')
-                ->get();
-            
-            // Format data untuk dropdown dengan stok di ujung
-            $formattedProducts = $products->map(function($product) {
-                $stockDisplay = number_format($product->total_stock, 2);
-                $displayText = "[{$product->sku}] {$product->name} ({$product->uom}) ({$stockDisplay})";
-                
-                return [
-                    'id' => $product->id,
-                    'sku' => $product->sku,
-                    'name' => $product->name,
-                    'uom' => $product->uom,
-                    'stock' => (float) $product->total_stock,
-                    'display_text' => $displayText
-                ];
-            });
-            
-            return response()->json([
-                'products' => $formattedProducts,
-                'branch_id' => $branchId
-            ]);
-            
-        } catch (\Exception $e) {
-            \Log::error('Get Products With Stock Error: ' . $e->getMessage());
-            return response()->json(['error' => 'Gagal mengambil data produk'], 500);
+/**
+ * AJAX: Mendapatkan produk dengan stok berdasarkan cabang untuk dropdown.
+ */
+public function getProductsWithStock(Request $request)
+{
+    try {
+        $branchId = (int) $request->input('branch_id');
+        
+        if (!$branchId) {
+            return response()->json(['error' => 'Branch ID harus diisi'], 400);
         }
+        
+        // Ambil semua lokasi untuk cabang ini
+        $locations = DB::table('stock_locations')
+            ->where('branch_id', $branchId)
+            ->pluck('id')
+            ->toArray();
+        
+        if (empty($locations)) {
+            // Auto-create default location
+            $locationId = DB::table('stock_locations')->insertGetId([
+                'branch_id' => $branchId,
+                'code' => 'STORE',
+                'name' => 'Gudang Utama',
+                'type' => 'STORE',
+                'created_at' => now()
+            ]);
+            $locations = [$locationId];
+        }
+        
+        // Ambil semua produk aktif dengan total stok per cabang
+        $products = DB::table('products as p')
+            ->join('uoms as u', 'u.id', '=', 'p.uom_id')
+            ->leftJoin('stock_quants as sq', function($join) use ($locations) {
+                $join->on('sq.product_id', '=', 'p.id')
+                     ->whereIn('sq.location_id', $locations);
+            })
+            ->where('p.is_active', 1)
+            ->select(
+                'p.id',
+                'p.sku', 
+                'p.name',
+                'u.code as uom',
+                DB::raw('COALESCE(SUM(sq.qty), 0) as total_stock')
+            )
+            ->groupBy('p.id', 'p.sku', 'p.name', 'u.code')
+            ->orderBy('p.sku')
+            ->get();
+        
+        // Format data untuk dropdown dengan stok di ujung
+        $formattedProducts = $products->map(function($product) {
+            $stockDisplay = number_format($product->total_stock, 0);
+            $displayText = "[{$product->sku}] {$product->name} ({$product->uom}) ({$stockDisplay})";
+            
+            return [
+                'id' => $product->id,
+                'sku' => $product->sku,
+                'name' => $product->name,
+                'uom' => $product->uom,
+                'stock' => (float) $product->total_stock,
+                'display_text' => $displayText
+            ];
+        });
+        
+        return response()->json([
+            'products' => $formattedProducts,
+            'branch_id' => $branchId
+        ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('Get Products With Stock Error: ' . $e->getMessage());
+        return response()->json(['error' => 'Gagal mengambil data produk'], 500);
     }
+}
 
     /**
      * Proses transfer stok antar cabang multi-item (langsung selesai).
