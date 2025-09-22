@@ -13,6 +13,7 @@ use App\Http\Controllers\GeminiChatController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\StockTransferController;
+
 /* ========== Auth ========== */
 Route::get('/login',  [AuthController::class,'showLogin'])->name('login');
 Route::post('/login', [AuthController::class,'login'])->name('login.do');
@@ -135,10 +136,22 @@ Route::get('/products/create', [\App\Http\Controllers\ProductController::class, 
     // Menyimpan data dari form produk baru
     Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store'])->name('products.store');
 // Rute untuk menampilkan halaman impor
+// 1. Product Import Routes (SPESIFIK) - HARUS DI ATAS
     Route::get('/products/import', [ProductImportController::class, 'showForm'])->name('admin.products.import.form');
-
-    // Rute untuk memproses file yang diunggah
     Route::post('/products/import', [ProductImportController::class, 'processImport'])->name('admin.products.import.process');
+    
+    // 2. Product Create Route (SPESIFIK) - HARUS DI ATAS  
+    Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+    
+    // 3. Product Management Routes (UMUM)
+    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+    
+    // 4. Product dengan Parameter {id} - HARUS DI BAWAH
+    Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
+    Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
+    Route::put('/products/{id}', [ProductController::class, 'update'])->name('products.update');
+    Route::patch('/products/{id}/toggle', [ProductController::class, 'toggleActive'])->name('products.toggle');
     /* ========== MANAJEMEN SISA POTONGAN ========== */
 // Menampilkan daftar sisa potongan beserta filter
 Route::get('/leftovers', [\App\Http\Controllers\LeftoverController::class, 'index'])->name('leftovers.index');

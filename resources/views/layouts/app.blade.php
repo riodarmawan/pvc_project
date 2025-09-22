@@ -241,28 +241,29 @@
     </main>
 
     <!-- Footer -->
-    <footer class="border-t border-slate-200 bg-white">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div class="flex items-center gap-3">
-            <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-400/30 to-blue-400/30 grid place-items-center ring-1 ring-slate-200">
-              <svg viewBox="0 0 20 20" class="h-4 w-4 text-blue-600">
-                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
-              </svg>
-            </div>
-            <div>
-              <p class="font-semibold text-slate-900">POS System</p>
-              <p class="text-sm text-slate-500">Modern Point of Sales</p>
-            </div>
-          </div>
-
-          <div class="text-sm text-slate-500">
-            <p>© {{ date('Y') }} POS System. All rights reserved.</p>
-            <p>Powered by Modern Technology</p>
-          </div>
+<footer class="border-t border-slate-200 bg-white">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-400/30 to-blue-400/30 grid place-items-center ring-1 ring-slate-200">
+          <svg viewBox="0 0 20 20" class="h-4 w-4 text-blue-600">
+            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
+          </svg>
+        </div>
+        <div>
+          <p class="font-semibold text-slate-900">Toko PVC System</p>
+          <p class="text-sm text-slate-500">Solusi Kasir Plafon & PVC</p>
         </div>
       </div>
-    </footer>
+
+      <div class="text-sm text-slate-500">
+        <p>© {{ date('Y') }} Toko PVC System. All rights reserved.</p>
+        <p>Dipercaya Untuk Bisnis PVC Indonesia</p>
+      </div>
+    </div>
+  </div>
+</footer>
+
   </div>
 
   @stack('modals')

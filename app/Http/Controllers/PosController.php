@@ -16,72 +16,74 @@ namespace App\Http\Controllers;
         /* =========================================================
         *  PAGE: KATALOG (/kasir)
         * =======================================================*/
-        public function index(Request $request)
-        {
-            $user     = Auth::user();
-            $branchId = (int) ($user->default_branch_id ?? 0);
+public function index(Request $request)
+{
+    $user     = Auth::user();
+    $branchId = (int) ($user->default_branch_id ?? 0);
 
-            // kategori buat dropdown
-            $categories = DB::table('product_categories')
-                ->orderBy('name')->get();
+    // kategori buat dropdown
+    $categories = DB::table('product_categories')
+        ->orderBy('name')->get();
 
-            // filter
-            $q     = trim((string) $request->get('q', ''));
-            $catId = $request->get('cat_id');
+    // filter
+    $q     = trim((string) $request->get('q', ''));
+    $catId = $request->get('cat_id');
 
-            // ===== PERUBAHAN DIMULAI DI SINI =====
+    // ===== PERUBAHAN DIMULAI DI SINI =====
 
-            // 1. Ambil SEMUA ID lokasi yang dimiliki oleh cabang saat ini.
-            $branchLocationIds = DB::table('stock_locations')
-                                    ->where('branch_id', $branchId)
-                                    ->pluck('id')
-                                    ->all();
-            
-            // Konversi array menjadi string agar bisa dimasukkan ke query SQL, contoh: "45,48"
-            // Jika tidak ada lokasi sama sekali, gunakan angka mustahil (-1) agar query tidak error.
-            $locationIdsString = !empty($branchLocationIds) ? implode(',', $branchLocationIds) : '-1';
+    // 1. Ambil SEMUA ID lokasi yang dimiliki oleh cabang saat ini.
+    $branchLocationIds = DB::table('stock_locations')
+                            ->where('branch_id', $branchId)
+                            ->pluck('id')
+                            ->all();
+    
+    // Konversi array menjadi string agar bisa dimasukkan ke query SQL, contoh: "45,48"
+    // Jika tidak ada lokasi sama sekali, gunakan angka mustahil (-1) agar query tidak error.
+    $locationIdsString = !empty($branchLocationIds) ? implode(',', $branchLocationIds) : '-1';
 
-            // ambil produk + harga (hpp*markup) + stok TOTAL di cabang
-            $query = DB::table('products as p')
-                ->selectRaw('p.id, p.sku, p.name, p.category_id, p.uom_id, p.notes')
-                // 2. Ubah subquery untuk menjumlahkan stok dari SEMUA lokasi di cabang tersebut.
-                ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
-                                    FROM stock_quants sq
-                                    WHERE sq.product_id = p.id
-                                    AND sq.location_id IN ({$locationIdsString})) as stock"));
+    // ambil produk + harga (hpp*markup) + stok TOTAL di cabang
+    $query = DB::table('products as p')
+        ->selectRaw('p.id, p.sku, p.name, p.category_id, p.uom_id, p.notes')
+        // 2. Ubah subquery untuk menjumlahkan stok dari SEMUA lokasi di cabang tersebut.
+        ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
+                            FROM stock_quants sq
+                            WHERE sq.product_id = p.id
+                            AND sq.location_id IN ({$locationIdsString})) as stock"))
+        // ⭐ TAMBAHAN: Filter hanya produk yang aktif
+        ->where('p.is_active', 1);
 
-            // ===== PERUBAHAN SELESAI =====
+    // ===== PERUBAHAN SELESAI =====
 
+    if ($q !== '') {
+        $query->where(function ($w) use ($q) {
+            $w->where('p.sku', 'like', "%{$q}%")
+              ->orWhere('p.name', 'like', "%{$q}%");
+        });
+    }
+    if (!empty($catId)) {
+        $query->where('p.category_id', (int)$catId);
+    }
 
-            if ($q !== '') {
-                $query->where(function ($w) use ($q) {
-                    $w->where('p.sku', 'like', "%{$q}%")
-                    ->orWhere('p.name', 'like', "%{$q}%");
-                });
-            }
-            if (!empty($catId)) {
-                $query->where('p.category_id', (int)$catId);
-            }
+    $query->orderBy('p.name');
 
-            $query->orderBy('p.name');
+    // pagination katalog
+    $products = $query->paginate(20)->withQueryString();
 
-            // pagination katalog
-            $products = $query->paginate(20)->withQueryString();
+    // hitung price dari notes->hpp
+    $products->getCollection()->transform(function ($row) {
+        $row->price = $this->priceFromNotes($row->notes);
+        $row->stock = (int) floor((float) ($row->stock ?? 0));
+        return $row;
+    });
 
-            // hitung price dari notes->hpp
-            $products->getCollection()->transform(function ($row) {
-                $row->price = $this->priceFromNotes($row->notes);
-                $row->stock = (int) floor((float) ($row->stock ?? 0));
-                return $row;
-            });
+    return view('kasir.index', [
+        'categories' => $categories,
+        'products'   => $products,
+        'q'          => $q,
+        'catId'      => $catId,
+    ]);
+}
 
-            return view('kasir.index', [
-                'categories' => $categories,
-                'products'   => $products,
-                'q'          => $q,
-                'catId'      => $catId,
-            ]);
-        }
 
 
         /* =========================================================
