@@ -288,236 +288,233 @@ public function invoice($id)
     // ✅ FONT SCALING PROFESSIONAL UNTUK DOT MATRIX 21x14cm
     $itemCount = count($groupedLines);
    
-// ✅ FONT SCALING +5 BASIS POINT UNTUK DOT MATRIX 21x14cm
-$itemCount = count($groupedLines);
-
-// ✅ FONT SIZE +5 BASIS POINT - LEBIH BESAR & JELAS
-$titleFont = 17;     // ✅ TITLE +5 (12 + 5)
-$headerFont = 15;    // ✅ HEADER +5 (10 + 5)
-$labelFont = 14;     // ✅ LABEL +5 (9 + 5)
-$dataFont = 13;      // ✅ DATA +5 (8 + 5)
-$tableFont = 13;     // ✅ TABLE +5 (8 + 5)
-$smallFont = 12;     // ✅ SMALL +5 (7 + 5)
-$paddingSize = 3;    // ✅ PADDING +1 (2 + 1)
-
-// Dynamic scaling berdasarkan items (+5 basis point)
-if ($itemCount > 20) {
-    $titleFont = 16;     // ✅ 11 + 5
-    $headerFont = 14;    // ✅ 9 + 5
-    $labelFont = 13;     // ✅ 8 + 5
-    $dataFont = 12;      // ✅ 7 + 5
-    $tableFont = 12;     // ✅ 7 + 5
-    $smallFont = 11;     // ✅ 6 + 5
-    $paddingSize = 2;    // ✅ 1 + 1
-}
-
+    // ✅ BOLD FONTS UNTUK DOT MATRIX - JELAS & TEBAL
+    $titleFont = 12;     // ✅ TITLE BESAR & BOLD
+    $headerFont = 10;    // ✅ HEADER COMPANY BOLD
+    $labelFont = 9;      // ✅ LABEL BOLD
+    $dataFont = 8;       // ✅ DATA NORMAL TAPI JELAS
+    $tableFont = 8;      // ✅ TABLE CONTENT
+    $smallFont = 7;      // ✅ SMALL INFO
+    $paddingSize = 2;    // ✅ ADEQUATE SPACING
+   
+    // Dynamic scaling berdasarkan items
+    if ($itemCount > 20) {
+        $titleFont = 11;
+        $headerFont = 9;
+        $labelFont = 8;
+        $dataFont = 7;
+        $tableFont = 7;
+        $smallFont = 6;
+        $paddingSize = 1;
+    }
 
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
     $html .= '<title>Invoice + Surat Jalan #'.$id.'</title>';
     
     // ✅ CSS PROFESSIONAL ELEGANT UNTUK DOT MATRIX 21x14CM
     $html .= '<style>
-        @page {
+    @page {
+        size: 21cm 14cm;
+        margin: 0;
+    }
+    
+    body {
+        font-family: "Courier New", "Consolas", monospace;
+        font-size: '.($dataFont + 2).'px;  /* ✅ BASE FONT +2PX = 10PX */
+        line-height: 1.1;
+        margin: 0;
+        padding: 0;
+        color: #000;
+        letter-spacing: 0.3px;
+        font-weight: 500;
+    }
+    
+    .page-container {
+        width: 20.5cm;
+        height: 13.5cm;
+        margin: 0;
+        padding: 3mm;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+    
+    .new-page {
+        page-break-before: always !important;
+        break-before: page !important;
+    }
+    
+    /* ✅ FONT HIERARCHY OPTIMAL +2PX */
+    .doc-title {
+        font-size: '.($titleFont + 2).'px;  /* ✅ 14PX */
+        font-weight: bold;
+        text-align: center;
+        letter-spacing: 1px;
+        margin: 2mm 0;
+    }
+    
+    .company-header {
+        font-size: '.($headerFont + 2).'px;  /* ✅ 12PX */
+        font-weight: bold;
+        text-align: center;
+        line-height: 1.2;
+        margin-bottom: 3mm;
+    }
+    
+    .section-label {
+        font-size: '.($labelFont + 2).'px;  /* ✅ 11PX */
+        font-weight: bold;
+        margin: 2mm 0 1mm 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .data-text {
+        font-size: '.($dataFont + 2).'px;  /* ✅ 10PX */
+        font-weight: normal;
+        line-height: 1.2;
+    }
+    
+    .emphasis {
+        font-weight: bold;
+    }
+    
+    .small-text {
+        font-size: '.($smallFont + 2).'px;  /* ✅ 9PX */
+        font-weight: normal;
+    }
+    
+    /* ✅ TABLE STYLING OPTIMAL */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1mm 0;
+    }
+    
+    .main-table {
+        border-top: 2px solid #000;
+        border-bottom: 2px solid #000;
+    }
+    
+    .main-table th {
+        font-size: '.($tableFont + 2).'px;  /* ✅ 10PX */
+        font-weight: bold;
+        padding: 2mm 1mm;
+        text-align: left;
+        border-bottom: 1px solid #000;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    
+    .main-table td {
+        font-size: '.($tableFont + 2).'px;  /* ✅ 10PX */
+        padding: 1.5mm 1mm;
+        vertical-align: top;
+        border-bottom: 1px dotted #999;
+        line-height: 1.1;
+    }
+    
+    .no-border {
+        border: none !important;
+    }
+    
+    .no-border td, .no-border th {
+        border: none !important;
+    }
+    
+    /* ✅ ALIGNMENT */
+    .right { text-align: right; }
+    .center { text-align: center; }
+    .left { text-align: left; }
+    
+    /* ✅ ELEGANT SEPARATORS */
+    .section-separator {
+        height: 1px;
+        background: #000;
+        margin: 3mm 0;
+    }
+    
+    .dotted-separator {
+        border-top: 1px dotted #666;
+        margin: 2mm 0;
+    }
+    
+    /* ✅ INFO BLOCKS */
+    .info-block {
+        margin: 2mm 0;
+        padding: 1mm 0;
+    }
+    
+    .total-block {
+        border: 2px solid #000;
+        padding: 2mm;
+        margin: 2mm 0;
+        background: none;
+    }
+    
+    .payment-info {
+        border: 1px solid #000;
+        padding: 2mm;
+        text-align: center;
+        margin: 2mm 0;
+    }
+    
+    /* ✅ SIGNATURE AREAS OPTIMAL */
+    .signature-area {
+        margin-top: 4mm;
+        height: 20mm;
+    }
+    
+    .signature-box {
+        height: 15mm;
+        margin: 3mm 0;
+        border-bottom: 1px solid #000;
+        position: relative;
+    }
+    
+    .signature-label {
+        font-size: '.($smallFont + 2).'px;  /* ✅ 9PX */
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 1mm;
+    }
+    
+    .signature-name {
+        font-size: '.($smallFont + 2).'px;  /* ✅ 9PX */
+        text-align: center;
+        margin-top: 1mm;
+    }
+    
+    /* ✅ PRINT OPTIMIZATIONS */
+    @media print {
+        @page { 
             size: 21cm 14cm;
-            margin: 0;
+            margin: 0; 
         }
         
-        body {
-            font-family: "Courier New", "Consolas", monospace;
-            font-size: '.$dataFont.'px;
-            line-height: 1.1;
-            margin: 0;
+        body { 
+            margin: 0; 
             padding: 0;
-            color: #000;
-            letter-spacing: 0.3px;
-            font-weight: 500; /* ✅ SLIGHTLY BOLD BASE */
+            -webkit-print-color-adjust: exact;
+            font-weight: 500;
         }
         
         .page-container {
-            width: 20.5cm;
-            height: 13.5cm;
-            margin: 0;
-            padding: 3mm;
-            box-sizing: border-box;
-            overflow: hidden;
-        }
-        
-        .new-page {
-            page-break-before: always !important;
-            break-before: page !important;
-        }
-        
-        /* ✅ ELEGANT TYPOGRAPHY HIERARCHY */
-        .doc-title {
-            font-size: '.$titleFont.'px;
-            font-weight: bold;
-            text-align: center;
-            letter-spacing: 1px;
-            margin: 2mm 0;
-        }
-        
-        .company-header {
-            font-size: '.$headerFont.'px;
-            font-weight: bold;
-            text-align: center;
-            line-height: 1.2;
-            margin-bottom: 3mm;
-        }
-        
-        .section-label {
-            font-size: '.$labelFont.'px;
-            font-weight: bold;
-            margin: 2mm 0 1mm 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .data-text {
-            font-size: '.$dataFont.'px;
-            font-weight: normal;
-            line-height: 1.2;
-        }
-        
-        .emphasis {
-            font-weight: bold;
-        }
-        
-        .small-text {
-            font-size: '.$smallFont.'px;
-            font-weight: normal;
-        }
-        
-        /* ✅ ELEGANT TABLE STYLING - NO HEAVY BORDERS */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1mm 0;
-        }
-        
-        .main-table {
-            border-top: 2px solid #000;
-            border-bottom: 2px solid #000;
-        }
-        
-        .main-table th {
-            font-size: '.$tableFont.'px;
-            font-weight: bold;
-            padding: 2mm 1mm;
-            text-align: left;
-            border-bottom: 1px solid #000;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-        
-        .main-table td {
-            font-size: '.$tableFont.'px;
-            padding: 1.5mm 1mm;
-            vertical-align: top;
-            border-bottom: 1px dotted #999;
-            line-height: 1.1;
-        }
-        
-        .no-border {
-            border: none !important;
-        }
-        
-        .no-border td, .no-border th {
-            border: none !important;
-        }
-        
-        /* ✅ PROFESSIONAL ALIGNMENT */
-        .right { text-align: right; }
-        .center { text-align: center; }
-        .left { text-align: left; }
-        
-        /* ✅ ELEGANT SEPARATORS */
-        .section-separator {
-            height: 1px;
-            background: #000;
-            margin: 3mm 0;
-        }
-        
-        .dotted-separator {
-            border-top: 1px dotted #666;
-            margin: 2mm 0;
-        }
-        
-        /* ✅ PROFESSIONAL INFO BLOCKS */
-        .info-block {
-            margin: 2mm 0;
-            padding: 1mm 0;
-        }
-        
-        .total-block {
-            border: 2px solid #000;
+            width: 21cm;
+            height: 14cm;
             padding: 2mm;
-            margin: 2mm 0;
-            background: none;
         }
         
-        .payment-info {
-            border: 1px solid #000;
-            padding: 2mm;
-            text-align: center;
-            margin: 2mm 0;
-        }
-        
-        /* ✅ SIGNATURE AREAS - ELEGANT & SPACIOUS */
-        .signature-area {
-            margin-top: 4mm;
-            height: 20mm;
+        .emphasis, .section-label, .doc-title, .company-header {
+            font-weight: bold !important;
         }
         
         .signature-box {
-            height: 15mm;
-            margin: 3mm 0;
-            border-bottom: 1px solid #000;
-            position: relative;
+            height: 12mm;
+            page-break-inside: avoid;
         }
-        
-        .signature-label {
-            font-size: '.$smallFont.'px;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 1mm;
-        }
-        
-        .signature-name {
-            font-size: '.$smallFont.'px;
-            text-align: center;
-            margin-top: 1mm;
-        }
-        
-        /* ✅ PRINT OPTIMIZATIONS */
-        @media print {
-            @page { 
-                size: 21cm 14cm;
-                margin: 0; 
-            }
-            
-            body { 
-                margin: 0; 
-                padding: 0;
-                -webkit-print-color-adjust: exact;
-                font-weight: 500; /* ✅ ENSURE BOLD PRINTING */
-            }
-            
-            .page-container {
-                width: 21cm;
-                height: 14cm;
-                padding: 2mm;
-            }
-            
-            .emphasis, .section-label, .doc-title, .company-header {
-                font-weight: bold !important;
-            }
-            
-            .signature-box {
-                height: 12mm;
-                page-break-inside: avoid;
-            }
-        }
-    </style></head><body>';
+    }
+</style>';
+
 
     // ========================================
     // ✅ HALAMAN 1: SURAT JALAN ELEGANT
