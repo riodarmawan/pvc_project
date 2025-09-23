@@ -289,27 +289,25 @@ public function invoice($id)
     $itemCount = count($groupedLines);
    
     // ✅ BOLD FONTS UNTUK DOT MATRIX - JELAS & TEBAL
-// ✅ TAMBAH 2 BASIS POIN DARI ORIGINAL - TIDAK BERLEBIHAN
-// ✅ TAMBAH 1 BASIS POIN DARI ORIGINAL - PAS DAN TIDAK BERLEBIHAN
-$titleFont = 13;     // Original 12px + 1 = 13px
-$headerFont = 11;    // Original 10px + 1 = 11px  
-$labelFont = 10;     // Original 9px + 1 = 10px
-$dataFont = 9;       // Original 8px + 1 = 9px
-$tableFont = 9;      // Original 8px + 1 = 9px
-$smallFont = 8;      // Original 7px + 1 = 8px
-$paddingSize = 2;    // TETAP SAMA
+// ✅ HANYA UBAH UKURAN FONT - LAYOUT TETAP SAMA
+$titleFont = 16;     // +4px dari 12px original
+$headerFont = 14;    // +4px dari 10px original  
+$labelFont = 12;     // +3px dari 9px original
+$dataFont = 11;      // +3px dari 8px original
+$tableFont = 11;     // +3px dari 8px original
+$smallFont = 10;     // +3px dari 7px original
+$paddingSize = 2;    // TETAP SAMA - TIDAK BERUBAH
 
-// Dynamic scaling - JUGA TAMBAH 1 DARI ORIGINAL
+// Dynamic scaling - HANYA FONT SIZE
 if ($itemCount > 20) {
-    $titleFont = 12;     // Original 11px + 1 = 12px
-    $headerFont = 10;    // Original 9px + 1 = 10px
-    $labelFont = 9;      // Original 8px + 1 = 9px
-    $dataFont = 8;       // Original 7px + 1 = 8px
-    $tableFont = 8;      // Original 7px + 1 = 8px
-    $smallFont = 7;      // Original 6px + 1 = 7px
-    $paddingSize = 1;    // TETAP SAMA
+    $titleFont = 15;
+    $headerFont = 13;
+    $labelFont = 11;
+    $dataFont = 10;
+    $tableFont = 10;
+    $smallFont = 9;
+    $paddingSize = 1;    // TETAP SAMA - TIDAK BERUBAH
 }
-
 
 
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
