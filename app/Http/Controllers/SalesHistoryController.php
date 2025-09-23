@@ -288,25 +288,29 @@ public function invoice($id)
     // ✅ FONT SCALING PROFESSIONAL UNTUK DOT MATRIX 21x14cm
     $itemCount = count($groupedLines);
    
-    // ✅ BOLD FONTS UNTUK DOT MATRIX - JELAS & TEBAL
-    $titleFont = 12;     // ✅ TITLE BESAR & BOLD
-    $headerFont = 10;    // ✅ HEADER COMPANY BOLD
-    $labelFont = 9;      // ✅ LABEL BOLD
-    $dataFont = 8;       // ✅ DATA NORMAL TAPI JELAS
-    $tableFont = 8;      // ✅ TABLE CONTENT
-    $smallFont = 7;      // ✅ SMALL INFO
-    $paddingSize = 2;    // ✅ ADEQUATE SPACING
-   
-    // Dynamic scaling berdasarkan items
-    if ($itemCount > 20) {
-        $titleFont = 11;
-        $headerFont = 9;
-        $labelFont = 8;
-        $dataFont = 7;
-        $tableFont = 7;
-        $smallFont = 6;
-        $paddingSize = 1;
-    }
+// ✅ FONT SCALING +5 BASIS POINT UNTUK DOT MATRIX 21x14cm
+$itemCount = count($groupedLines);
+
+// ✅ FONT SIZE +5 BASIS POINT - LEBIH BESAR & JELAS
+$titleFont = 17;     // ✅ TITLE +5 (12 + 5)
+$headerFont = 15;    // ✅ HEADER +5 (10 + 5)
+$labelFont = 14;     // ✅ LABEL +5 (9 + 5)
+$dataFont = 13;      // ✅ DATA +5 (8 + 5)
+$tableFont = 13;     // ✅ TABLE +5 (8 + 5)
+$smallFont = 12;     // ✅ SMALL +5 (7 + 5)
+$paddingSize = 3;    // ✅ PADDING +1 (2 + 1)
+
+// Dynamic scaling berdasarkan items (+5 basis point)
+if ($itemCount > 20) {
+    $titleFont = 16;     // ✅ 11 + 5
+    $headerFont = 14;    // ✅ 9 + 5
+    $labelFont = 13;     // ✅ 8 + 5
+    $dataFont = 12;      // ✅ 7 + 5
+    $tableFont = 12;     // ✅ 7 + 5
+    $smallFont = 11;     // ✅ 6 + 5
+    $paddingSize = 2;    // ✅ 1 + 1
+}
+
 
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
     $html .= '<title>Invoice + Surat Jalan #'.$id.'</title>';
