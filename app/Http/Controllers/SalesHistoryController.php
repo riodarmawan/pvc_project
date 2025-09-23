@@ -289,24 +289,25 @@ public function invoice($id)
     $itemCount = count($groupedLines);
    
     // ✅ BOLD FONTS UNTUK DOT MATRIX - JELAS & TEBAL
-$titleFont = 16;     // +4px total - TITLE SANGAT MENONJOL
-$headerFont = 14;    // +4px total - HEADER COMPANY SANGAT JELAS  
-$labelFont = 12;     // +3px total - LABEL MUDAH DIBACA
-$dataFont = 11;      // +3px total - DATA CONTENT OPTIMAL
-$tableFont = 11;     // +3px total - TABLE SANGAT READABLE
-$smallFont = 10;     // +3px total - SMALL INFO JELAS
+// ✅ TAMBAH 2 BASIS POIN DARI ORIGINAL - TIDAK BERLEBIHAN
+// ✅ TAMBAH 1 BASIS POIN DARI ORIGINAL - PAS DAN TIDAK BERLEBIHAN
+$titleFont = 13;     // Original 12px + 1 = 13px
+$headerFont = 11;    // Original 10px + 1 = 11px  
+$labelFont = 10;     // Original 9px + 1 = 10px
+$dataFont = 9;       // Original 8px + 1 = 9px
+$tableFont = 9;      // Original 8px + 1 = 9px
+$smallFont = 8;      // Original 7px + 1 = 8px
+$paddingSize = 2;    // TETAP SAMA
 
-
-   
-    // Dynamic scaling berdasarkan items
+// Dynamic scaling - JUGA TAMBAH 1 DARI ORIGINAL
 if ($itemCount > 20) {
-    $titleFont = 15;     // +4px dari original 11
-    $headerFont = 13;    // +4px dari original 9
-    $labelFont = 11;     // +3px dari original 8  
-    $dataFont = 10;      // +3px dari original 7
-    $tableFont = 10;     // +3px dari original 7
-    $smallFont = 9;      // +3px dari original 6
-    $paddingSize = 1;
+    $titleFont = 12;     // Original 11px + 1 = 12px
+    $headerFont = 10;    // Original 9px + 1 = 10px
+    $labelFont = 9;      // Original 8px + 1 = 9px
+    $dataFont = 8;       // Original 7px + 1 = 8px
+    $tableFont = 8;      // Original 7px + 1 = 8px
+    $smallFont = 7;      // Original 6px + 1 = 7px
+    $paddingSize = 1;    // TETAP SAMA
 }
 
 
