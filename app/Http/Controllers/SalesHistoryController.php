@@ -193,22 +193,18 @@ return response()->json([
 }
 
 
-    /** Cetak invoice (html sederhana, siap print) */
-/** Cetak invoice (html sederhana, siap print) */
-/** Cetak invoice (html sederhana, siap print) */
-/** Cetak invoice (html sederhana, siap print) */
 /** Cetak invoice + surat jalan (html sederhana, siap print) */
 public function invoice($id)
 {
     $id = (int)$id;
     $allowed = $this->allowedBranchIds();
-    
+   
     $sale = DB::table('pos_sales as s')
         ->leftJoin('customers as c','c.id','=','s.customer_id')
         ->leftJoin('branches as b','b.id','=','s.branch_id')
         ->selectRaw('s.*, c.name as customer_name, c.phone as customer_phone, b.name as branch_name, b.address as branch_address')
         ->where('s.id', $id)->first();
-        
+       
     if (!$sale || !in_array((int)$sale->branch_id, $allowed, true)) {
         abort(404);
     }
@@ -228,7 +224,7 @@ public function invoice($id)
             ->where('project_id', $sale->project_id)
             ->pluck('name')
             ->toArray();
-        
+       
         if (count($serviceNames) > 0) {
             $actualServiceNames = $serviceNames;
         }
@@ -240,7 +236,7 @@ public function invoice($id)
 
     foreach ($lines as $line) {
         $productId = $line->product_id;
-        
+       
         if (!isset($groupedLines[$productId])) {
             $groupedLines[$productId] = [
                 'sku' => $line->sku,
@@ -289,74 +285,81 @@ public function invoice($id)
     $saleDate = date('d/m/Y H:i', strtotime($sale->sale_datetime));
     $todayDate = date('d/m/Y');
 
-    // ✅ DYNAMIC SCALING KHUSUS EPSON LX-310 DOT MATRIX
+    // ✅ DYNAMIC SCALING UNTUK CONTINUOUS FORM
     $itemCount = count($groupedLines);
-    
-    // Font sizes optimal untuk dot matrix 240x216 dpi
-    $baseFont = 10;      // 12 CPI optimal
-    $tableFont = 9;      // 15 CPI untuk tabel
-    $smallFont = 8;      // 17 CPI untuk detail
-    $mediumFont = 11;    // 10 CPI untuk header
-    $largeFont = 12;     // 10 CPI bold
-    $paddingSize = 2;    // Minimal padding untuk dot matrix
-    $marginSize = '0.2in'; // Margin minimal
-    
-    // Scaling berdasarkan jumlah items untuk kertas continuous form
+   
+    // Font sizes optimal untuk continuous form LX-310
+    $baseFont = 10;      
+    $tableFont = 9;      
+    $smallFont = 8;      
+    $mediumFont = 11;    
+    $largeFont = 12;     
+    $paddingSize = 2;    
+    $marginSize = '3mm'; 
+   
+    // Scaling berdasarkan jumlah items
     if ($itemCount > 20) {
-        $baseFont = 9;       // 15 CPI
-        $tableFont = 8;      // 17 CPI
-        $smallFont = 7;      // 20 CPI
-        $mediumFont = 10;    // 12 CPI
-        $largeFont = 11;     // 10 CPI
+        $baseFont = 9;       
+        $tableFont = 8;      
+        $smallFont = 7;      
+        $mediumFont = 10;    
+        $largeFont = 11;     
         $paddingSize = 1;
-        $marginSize = '0.15in';
+        $marginSize = '2mm';
     }
-    
+   
     if ($itemCount > 35) {
-        $baseFont = 8;       // 17 CPI
-        $tableFont = 7;      // 20 CPI
-        $smallFont = 6;      // Condensed
-        $mediumFont = 9;     // 15 CPI
-        $largeFont = 10;     // 12 CPI
+        $baseFont = 8;       
+        $tableFont = 7;      
+        $smallFont = 6;      
+        $mediumFont = 9;     
+        $largeFont = 10;     
         $paddingSize = 1;
-        $marginSize = '0.1in';
+        $marginSize = '1mm';
     }
 
-    // ✅ HTML OPTIMIZED UNTUK EPSON LX-310 DOT MATRIX
+    // ✅ HTML OPTIMIZED UNTUK EPSON LX-310 CONTINUOUS FORM
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
     $html .= '<title>Invoice + Surat Jalan #'.$id.'</title>';
-    $html .= '<style>
-        @page { 
-            size: 10in 14in; 
-            margin: '.$marginSize.'; 
+    
+    // ✅ CSS DIPERBAHARUI UNTUK CONTINUOUS FORM
+$html .= '<style>
+        @page {
+            size: 9.5in auto; /* ✅ AUTO HEIGHT FOR CONTINUOUS */
+            margin: 0;
         }
-        body { 
-            font-family: "Courier New", "Draft", monospace; 
-            font-size: '.$baseFont.'px; 
-            line-height: 1.0; 
-            margin: 0; 
-            padding: 0; 
+        
+        body {
+            font-family: "Courier New", monospace;
+            font-size: '.$baseFont.'px;
+            line-height: 1.0;
+            margin: 0;
+            padding: 2mm;
+            width: 9.1in;
             color: #000;
             letter-spacing: 0.5px;
         }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            font-size: '.$tableFont.'px; 
-            font-family: "Courier New", monospace; 
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: '.$tableFont.'px;
         }
-        th, td { 
-            padding: '.$paddingSize.'px 3px; 
-            text-align: left; 
-            border-bottom: 1px solid #000; 
+        
+        th, td {
+            padding: '.$paddingSize.'px 2px;
+            text-align: left;
+            border-bottom: 1px solid #000;
             vertical-align: top;
             word-break: break-word;
         }
-        th { 
-            font-weight: bold; 
-            border-bottom: 2px solid #000; 
+        
+        th {
+            font-weight: bold;
+            border-bottom: 2px solid #000;
             text-transform: uppercase;
         }
+        
         .right { text-align: right; }
         .center { text-align: center; }
         .bold { font-weight: bold; }
@@ -364,44 +367,70 @@ public function invoice($id)
         .medium { font-size: '.$mediumFont.'px; font-weight: bold; }
         .small { font-size: '.$smallFont.'px; }
         .header-company { text-align: center; }
-        .line-separator { 
-            border-top: 2px solid #000; 
-            margin: '.($paddingSize * 2).'px 0; 
-        }
-        .dotted-line { 
-            border-top: 1px dotted #000; 
-            margin: '.$paddingSize.'px 0; 
-        }
-        .page-break {
-            page-break-before: always;
+        
+        .line-separator {
+            border-top: 2px solid #000;
+            margin: '.$paddingSize.'px 0;
         }
         
-        /* Dot Matrix Optimization */
-        .dot-matrix-text {
-            font-family: "Courier New", monospace;
-            letter-spacing: 0.5px;
-            font-weight: normal;
+        .dotted-line {
+            border-top: 1px dotted #000;
+            margin: '.$paddingSize.'px 0;
         }
         
-        .dot-matrix-bold {
-            font-family: "Courier New", monospace;
-            font-weight: bold;
-            letter-spacing: 0.3px;
+        /* ✅ SIMPLE DOCUMENT SEPARATOR */
+        .document-separator {
+            height: 10mm;
+            margin: 3mm 0;
+            text-align: center;
+            border-bottom: 1px dotted #999;
+            position: relative;
         }
         
-        @media print { 
+        .document-separator::after {
+            content: "• • • • • • • • • • • • • • • • • • • • • • • • •";
+            position: absolute;
+            bottom: 2mm;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 8px;
+            color: #999;
+        }
+        
+        /* ✅ FORCE NO PAGE BREAKS */
+        * {
+            page-break-before: avoid !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-before: avoid !important;
+            break-after: avoid !important;
+            break-inside: avoid !important;
+        }
+        
+        @media print {
+            @page { 
+                size: 9.5in auto; 
+                margin: 0; 
+            }
+            
             body { 
                 margin: 0; 
+                padding: 1mm;
                 -webkit-print-color-adjust: exact;
             }
-            .no-print { display: none; }
+            
+            .document-separator {
+                height: 8mm;
+                page-break-before: avoid !important;
+                page-break-after: avoid !important;
+            }
         }
     </style></head><body>';
 
     // ========================================
-    // ✅ HALAMAN 1: SURAT JALAN
+    // ✅ DOKUMEN 1: SURAT JALAN
     // ========================================
-    
+   
     // HEADER SURAT JALAN
     $html .= '<table style="border: none; margin-bottom: '.($paddingSize * 2).'px;">';
     $html .= '<tr><td style="border: none; padding: '.$paddingSize.'px;" class="header-company dot-matrix-bold">';
@@ -409,11 +438,11 @@ public function invoice($id)
     $html .= '<div class="medium">'.strtoupper(e($sale->branch_name ?? 'TOKO')).'</div>';
     $html .= '<div class="small dot-matrix-text" style="margin: 1px 0;">SEDIA: WPC DINDING, ATAP UPVC, KACA BEVEL, HOLLO</div>';
     $html .= '<div class="small dot-matrix-text">WALL MOULDING PVC, LANTAI VINYL, LANTAI SPC, DLL</div>';
-    
+   
     if (!empty($sale->branch_address)) {
         $html .= '<div class="small dot-matrix-text" style="margin: 1px 0;">'.e($sale->branch_address).'</div>';
     }
-    
+   
     $html .= '<div class="small dot-matrix-text">Telp: 0811 2287 2006</div>';
     $html .= '</td></tr></table>';
 
@@ -457,31 +486,31 @@ public function invoice($id)
     foreach ($groupedLines as $item) {
         $html .= '<tr>';
         $html .= '<td class="center">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
-        
+       
         // KODE/SKU
         $displaySku = $item['sku'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
             $displaySku = 'LAYANAN';
         }
         $html .= '<td class="bold">'.e($displaySku).'</td>';
-        
+       
         // NAMA PRODUK
         $displayName = $item['name'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
-            $displayName = count($actualServiceNames) === 1 
-                ? $actualServiceNames[0] 
+            $displayName = count($actualServiceNames) === 1
+                ? $actualServiceNames[0]
                 : implode(', ', $actualServiceNames);
         }
-        
+       
         $html .= '<td>';
         $html .= '<div class="bold">'.e($displayName).'</div>';
-        
+       
         // INFO SISA JIKA ADA
         if ($item['qty_sisa'] > 0) {
             $html .= '<div class="small" style="color: #666;">+ Sisa: '.number_format($item['qty_sisa'], 2).'m</div>';
         }
         $html .= '</td>';
-        
+       
         // QUANTITY
         if ($item['is_service']) {
             $html .= '<td class="center">1</td>';
@@ -493,7 +522,7 @@ public function invoice($id)
             $html .= '<td class="center">-</td>';
             $html .= '<td class="center">-</td>';
         }
-        
+       
         $html .= '</tr>';
         $no++;
     }
@@ -534,10 +563,18 @@ public function invoice($id)
     $html .= '</tr></table>';
 
     // ========================================
-    // ✅ PAGE BREAK - HALAMAN 2: INVOICE
+    // ✅ SEPARATOR - GANTI PAGE BREAK
     // ========================================
-    
-    $html .= '<div class="page-break"></div>';
+   
+    $html .= '<div class="page-separator">
+        <div style="text-align: center; margin-top: 15mm; font-size: 10px; color: #999; letter-spacing: 2px;">
+            ═══════════════════════════════════════════════════════════════
+        </div>
+    </div>';
+
+    // ========================================
+    // ✅ DOKUMEN 2: INVOICE
+    // ========================================
 
     // HEADER INVOICE
     $html .= '<table style="border: none; margin-bottom: '.($paddingSize * 2).'px;">';
@@ -545,11 +582,11 @@ public function invoice($id)
     $html .= '<div class="large">'.strtoupper(e($sale->branch_name ?? 'TOKO')).'</div>';
     $html .= '<div class="small dot-matrix-text" style="margin: 1px 0;">SEDIA: WPC DINDING, ATAP UPVC, KACA BEVEL, HOLLO</div>';
     $html .= '<div class="small dot-matrix-text">WALL MOULDING PVC, LANTAI VINYL, LANTAI SPC, DLL</div>';
-    
+   
     if (!empty($sale->branch_address)) {
         $html .= '<div class="small dot-matrix-text" style="margin: 1px 0;">'.e($sale->branch_address).'</div>';
     }
-    
+   
     $html .= '<div class="small dot-matrix-text">Telp: 0811 2287 2006</div>';
     $html .= '</td></tr></table>';
 
@@ -564,7 +601,7 @@ public function invoice($id)
     $html .= '<div class="dot-matrix-text">Tanggal: '.$saleDate.'</div>';
     $html .= '</td>';
     $html .= '<td style="border: none; text-align: right; padding: 1px;" class="dot-matrix-text">';
-    
+   
     // INFO PELANGGAN
     if ($sale->customer_name) {
         $html .= '<div class="bold">Pelanggan:</div>';
@@ -576,7 +613,7 @@ public function invoice($id)
         $html .= '<div class="bold">Pelanggan:</div>';
         $html .= '<div>Umum</div>';
     }
-    
+   
     $html .= '</td>';
     $html .= '</tr></table>';
 
@@ -594,29 +631,29 @@ public function invoice($id)
 
     foreach ($groupedLines as $item) {
         $html .= '<tr>';
-        
+       
         // NAMA PRODUK
         $displayName = $item['name'];
         $displaySku = $item['sku'];
-        
+       
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
-            $displayName = count($actualServiceNames) === 1 
-                ? $actualServiceNames[0] 
+            $displayName = count($actualServiceNames) === 1
+                ? $actualServiceNames[0]
                 : implode(', ', $actualServiceNames);
             $displaySku = 'LAYANAN';
         }
-        
+       
         $html .= '<td>';
         $html .= '<div class="bold">'.e($displayName).'</div>';
         $html .= '<div class="small">('.e($displaySku).')</div>';
-        
+       
         // INFO SISA JIKA ADA
         if ($item['qty_sisa'] > 0) {
             $html .= '<div class="small" style="color: #666;">+ Sisa: '.number_format($item['qty_sisa'], 2).'m</div>';
         }
-        
+       
         $html .= '</td>';
-        
+       
         // QUANTITY
         if ($item['is_service']) {
             $html .= '<td class="center">1 LAYANAN</td>';
@@ -625,7 +662,7 @@ public function invoice($id)
         } else {
             $html .= '<td class="center">-</td>';
         }
-        
+       
         $html .= '<td class="right">'.number_format($item['display_price'], 0, ',', '.').'</td>';
         $html .= '<td class="right bold">'.number_format($item['total_subtotal'], 0, ',', '.').'</td>';
         $html .= '</tr>';
@@ -636,24 +673,24 @@ public function invoice($id)
     $html .= '<table style="border: none; margin-top: '.($paddingSize * 3).'px;">';
     $html .= '<tr><td style="border: none; width: 55%;"></td>';
     $html .= '<td style="border: none; text-align: right; padding: 1px;">';
-    
+   
     $html .= '<table style="border: 1px solid #000;" class="dot-matrix-text">';
     $html .= '<tr><td style="border-bottom: 1px solid #000; padding: '.$paddingSize.'px;">Subtotal:</td>';
     $html .= '<td class="right bold" style="border-bottom: 1px solid #000; padding: '.$paddingSize.'px;">Rp '.number_format($calculatedSubtotal, 0, ',', '.').'</td></tr>';
-    
+   
     if ($discount > 0) {
         $html .= '<tr><td style="border-bottom: 1px solid #000; padding: '.$paddingSize.'px;">Diskon:</td>';
         $html .= '<td class="right" style="border-bottom: 1px solid #000; padding: '.$paddingSize.'px;">-Rp '.number_format($discount, 0, ',', '.').'</td></tr>';
     }
-    
+   
     $html .= '<tr><td class="bold medium" style="border-bottom: none; padding: '.$paddingSize.'px;">TOTAL:</td>';
     $html .= '<td class="right bold medium" style="border-bottom: none; padding: '.$paddingSize.'px;">Rp '.number_format($finalTotal, 0, ',', '.').'</td></tr>';
-    
+   
     if ($changeAmount > 0) {
         $html .= '<tr><td style="border-bottom: none; padding: '.$paddingSize.'px;">Kembalian:</td>';
         $html .= '<td class="right" style="border-bottom: none; padding: '.$paddingSize.'px;">Rp '.number_format($changeAmount, 0, ',', '.').'</td></tr>';
     }
-    
+   
     $html .= '</table>';
     $html .= '</td></tr></table>';
 
@@ -673,18 +710,18 @@ public function invoice($id)
     $html .= '<table style="border: none; margin-top: '.($paddingSize * 4).'px;" class="dot-matrix-text">';
     $html .= '<tr>';
     $html .= '<td style="border: none; width: 50%; padding: 1px;">';
-    
+   
     // CATATAN JIKA ADA
     if (!empty($sale->notes)) {
         $cleanNotes = preg_replace('/\|\s*KEMBALIAN:.*$/i', '', $sale->notes);
         $cleanNotes = trim($cleanNotes);
-        
+       
         if (!empty($cleanNotes)) {
             $html .= '<div class="bold">Catatan:</div>';
             $html .= '<div class="small">'.nl2br(e($cleanNotes)).'</div>';
         }
     }
-    
+   
     $html .= '</td>';
     $html .= '<td style="border: none; text-align: center; padding: 1px;">';
     $html .= '<div>Hormat kami,</div>';
@@ -693,11 +730,41 @@ public function invoice($id)
     $html .= '</td>';
     $html .= '</tr></table>';
 
-    $html .= '<script>window.print()</script>';
+    // ✅ JAVASCRIPT OPTIMIZED UNTUK CONTINUOUS FORM
+    $html .= '<script>
+        // ✅ WAIT FOR COMPLETE LOAD
+        document.addEventListener("DOMContentLoaded", function() {
+            // ✅ SMALL DELAY FOR RENDERING
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        });
+
+        // ✅ PREVENT BROWSER PAGE BREAK HANDLING
+        window.addEventListener("beforeprint", function(event) {
+            document.body.style.margin = "0";
+            document.body.style.padding = "2mm";
+            
+            // ✅ FORCE CONTINUOUS LAYOUT
+            const tables = document.querySelectorAll("table");
+            tables.forEach(function(table) {
+                table.style.pageBreakInside = "avoid";
+            });
+        });
+        
+        // ✅ CLEANUP AFTER PRINT
+        window.addEventListener("afterprint", function(event) {
+            // Optional: redirect or close
+            // window.close();
+        });
+    </script>';
+
     $html .= '</body></html>';
 
     return response($html);
 }
+
+
 
 /**
  * Helper function untuk konversi angka ke terbilang
