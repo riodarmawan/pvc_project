@@ -285,61 +285,55 @@ public function invoice($id)
     $saleDate = date('d/m/Y H:i', strtotime($sale->sale_datetime));
     $todayDate = date('d/m/Y');
 
-    // ✅ FONT SCALING UNTUK UKURAN 21x14cm (LEBIH KECIL)
+    // ✅ FONT SCALING PROFESSIONAL UNTUK DOT MATRIX 21x14cm
     $itemCount = count($groupedLines);
    
-    // Font sizes optimal untuk 21x14cm continuous form
-    $baseFont = 8;       // ✅ LEBIH KECIL UNTUK 14CM HEIGHT
-    $tableFont = 7;      
-    $smallFont = 6;      
-    $mediumFont = 9;     
-    $largeFont = 10;     
-    $paddingSize = 1;    // ✅ MINIMAL PADDING
+    // ✅ BOLD FONTS UNTUK DOT MATRIX - JELAS & TEBAL
+    $titleFont = 12;     // ✅ TITLE BESAR & BOLD
+    $headerFont = 10;    // ✅ HEADER COMPANY BOLD
+    $labelFont = 9;      // ✅ LABEL BOLD
+    $dataFont = 8;       // ✅ DATA NORMAL TAPI JELAS
+    $tableFont = 8;      // ✅ TABLE CONTENT
+    $smallFont = 7;      // ✅ SMALL INFO
+    $paddingSize = 2;    // ✅ ADEQUATE SPACING
    
-    // Scaling berdasarkan jumlah items (LEBIH AGRESIF)
-    if ($itemCount > 15) {
-        $baseFont = 7;       
-        $tableFont = 6;      
-        $smallFont = 5;      
-        $mediumFont = 8;     
-        $largeFont = 9;      
-        $paddingSize = 0;
-    }
-   
-    if ($itemCount > 25) {
-        $baseFont = 6;       
-        $tableFont = 5;      
-        $smallFont = 4;      
-        $mediumFont = 7;     
-        $largeFont = 8;      
-        $paddingSize = 0;
+    // Dynamic scaling berdasarkan items
+    if ($itemCount > 20) {
+        $titleFont = 11;
+        $headerFont = 9;
+        $labelFont = 8;
+        $dataFont = 7;
+        $tableFont = 7;
+        $smallFont = 6;
+        $paddingSize = 1;
     }
 
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
     $html .= '<title>Invoice + Surat Jalan #'.$id.'</title>';
     
-    // ✅ CSS UNTUK UKURAN 21CM x 14CM CONTINUOUS FORM
+    // ✅ CSS PROFESSIONAL ELEGANT UNTUK DOT MATRIX 21x14CM
     $html .= '<style>
         @page {
-            size: 21cm 14cm; /* ✅ UKURAN 21x14 CM SESUAI PERMINTAAN */
+            size: 21cm 14cm;
             margin: 0;
         }
         
         body {
-            font-family: "Courier New", monospace;
-            font-size: '.$baseFont.'px;
-            line-height: 0.9; /* ✅ LINE HEIGHT LEBIH RAPAT */
+            font-family: "Courier New", "Consolas", monospace;
+            font-size: '.$dataFont.'px;
+            line-height: 1.1;
             margin: 0;
             padding: 0;
             color: #000;
-            letter-spacing: 0.3px; /* ✅ LETTER SPACING LEBIH RAPAT */
+            letter-spacing: 0.3px;
+            font-weight: 500; /* ✅ SLIGHTLY BOLD BASE */
         }
         
         .page-container {
-            width: 20.5cm; /* ✅ LEBAR SESUAI KERTAS 21CM */
-            height: 13.5cm; /* ✅ TINGGI SESUAI KERTAS 14CM */
+            width: 20.5cm;
+            height: 13.5cm;
             margin: 0;
-            padding: 2mm; /* ✅ MINIMAL PADDING */
+            padding: 3mm;
             box-sizing: border-box;
             overflow: hidden;
         }
@@ -349,95 +343,151 @@ public function invoice($id)
             break-before: page !important;
         }
         
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: '.$tableFont.'px;
-            page-break-inside: avoid;
-            margin-bottom: 1mm; /* ✅ MINIMAL MARGIN */
-        }
-        
-        th, td {
-            padding: '.$paddingSize.'px 1px; /* ✅ PADDING MINIMAL */
-            text-align: left;
-            border-bottom: 1px solid #000;
-            vertical-align: top;
-            word-break: break-word;
-            line-height: 1.0; /* ✅ LINE HEIGHT RAPAT */
-        }
-        
-        th {
+        /* ✅ ELEGANT TYPOGRAPHY HIERARCHY */
+        .doc-title {
+            font-size: '.$titleFont.'px;
             font-weight: bold;
-            border-bottom: 1px solid #000; /* ✅ BORDER TIPIS */
+            text-align: center;
+            letter-spacing: 1px;
+            margin: 2mm 0;
+        }
+        
+        .company-header {
+            font-size: '.$headerFont.'px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1.2;
+            margin-bottom: 3mm;
+        }
+        
+        .section-label {
+            font-size: '.$labelFont.'px;
+            font-weight: bold;
+            margin: 2mm 0 1mm 0;
             text-transform: uppercase;
-            font-size: '.$smallFont.'px; /* ✅ HEADER KECIL */
+            letter-spacing: 0.5px;
         }
         
-        .right { text-align: right; }
-        .center { text-align: center; }
-        .bold { font-weight: bold; }
-        .large { font-size: '.$largeFont.'px; font-weight: bold; }
-        .medium { font-size: '.$mediumFont.'px; font-weight: bold; }
-        .small { font-size: '.$smallFont.'px; }
-        .tiny { font-size: '.($smallFont-1).'px; } /* ✅ EXTRA SMALL */
-        .header-company { text-align: center; }
-        
-        .line-separator {
-            border-top: 1px solid #000; /* ✅ BORDER TIPIS */
-            margin: 1mm 0; /* ✅ MARGIN MINIMAL */
+        .data-text {
+            font-size: '.$dataFont.'px;
+            font-weight: normal;
+            line-height: 1.2;
         }
         
-        .dotted-line {
-            border-top: 1px dotted #000;
-            margin: 0.5mm 0; /* ✅ MARGIN MINIMAL */
+        .emphasis {
+            font-weight: bold;
         }
         
-        .dot-matrix-text {
-            font-family: "Courier New", monospace;
-            letter-spacing: 0.3px;
+        .small-text {
+            font-size: '.$smallFont.'px;
             font-weight: normal;
         }
         
-        .dot-matrix-bold {
-            font-family: "Courier New", monospace;
-            font-weight: bold;
-            letter-spacing: 0.2px;
+        /* ✅ ELEGANT TABLE STYLING - NO HEAVY BORDERS */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1mm 0;
         }
         
-        /* ✅ SIGNATURE AREA - DISESUAIKAN UNTUK 14CM HEIGHT */
-        .signature-section {
-            min-height: 15mm; /* ✅ LEBIH KECIL DARI SEBELUMNYA */
+        .main-table {
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+        }
+        
+        .main-table th {
+            font-size: '.$tableFont.'px;
+            font-weight: bold;
+            padding: 2mm 1mm;
+            text-align: left;
+            border-bottom: 1px solid #000;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .main-table td {
+            font-size: '.$tableFont.'px;
+            padding: 1.5mm 1mm;
+            vertical-align: top;
+            border-bottom: 1px dotted #999;
+            line-height: 1.1;
+        }
+        
+        .no-border {
+            border: none !important;
+        }
+        
+        .no-border td, .no-border th {
+            border: none !important;
+        }
+        
+        /* ✅ PROFESSIONAL ALIGNMENT */
+        .right { text-align: right; }
+        .center { text-align: center; }
+        .left { text-align: left; }
+        
+        /* ✅ ELEGANT SEPARATORS */
+        .section-separator {
+            height: 1px;
+            background: #000;
+            margin: 3mm 0;
+        }
+        
+        .dotted-separator {
+            border-top: 1px dotted #666;
+            margin: 2mm 0;
+        }
+        
+        /* ✅ PROFESSIONAL INFO BLOCKS */
+        .info-block {
+            margin: 2mm 0;
+            padding: 1mm 0;
+        }
+        
+        .total-block {
+            border: 2px solid #000;
+            padding: 2mm;
+            margin: 2mm 0;
+            background: none;
+        }
+        
+        .payment-info {
+            border: 1px solid #000;
+            padding: 2mm;
+            text-align: center;
+            margin: 2mm 0;
+        }
+        
+        /* ✅ SIGNATURE AREAS - ELEGANT & SPACIOUS */
+        .signature-area {
+            margin-top: 4mm;
+            height: 20mm;
         }
         
         .signature-box {
-            height: 12mm; /* ✅ TINGGI SIGNATURE LEBIH KECIL */
-            margin: 5mm 0 2mm 0; /* ✅ MARGIN LEBIH KECIL */
+            height: 15mm;
+            margin: 3mm 0;
             border-bottom: 1px solid #000;
             position: relative;
         }
         
-        .signature-name {
-            margin-top: 1mm;
+        .signature-label {
             font-size: '.$smallFont.'px;
-        }
-        
-        /* ✅ COMPACT STYLES UNTUK 21x14 */
-        .compact-header {
+            font-weight: bold;
+            text-align: center;
             margin-bottom: 1mm;
         }
         
-        .compact-table {
-            margin: 1mm 0;
+        .signature-name {
+            font-size: '.$smallFont.'px;
+            text-align: center;
+            margin-top: 1mm;
         }
         
-        .compact-row {
-            height: auto;
-            min-height: 3mm;
-        }
-        
+        /* ✅ PRINT OPTIMIZATIONS */
         @media print {
             @page { 
-                size: 21cm 14cm; /* ✅ UKURAN PRINT 21x14 CM */
+                size: 21cm 14cm;
                 margin: 0; 
             }
             
@@ -445,89 +495,99 @@ public function invoice($id)
                 margin: 0; 
                 padding: 0;
                 -webkit-print-color-adjust: exact;
+                font-weight: 500; /* ✅ ENSURE BOLD PRINTING */
             }
             
             .page-container {
                 width: 21cm;
                 height: 14cm;
-                padding: 1mm; /* ✅ MINIMAL PADDING PRINT */
-                page-break-after: avoid;
+                padding: 2mm;
             }
             
-            .new-page {
-                page-break-before: always !important;
-            }
-            
-            table, .signature-section, .total-section {
-                page-break-inside: avoid !important;
+            .emphasis, .section-label, .doc-title, .company-header {
+                font-weight: bold !important;
             }
             
             .signature-box {
-                height: 10mm; /* ✅ LEBIH KECIL SAAT PRINT */
-                margin: 4mm 0 2mm 0;
+                height: 12mm;
+                page-break-inside: avoid;
             }
         }
     </style></head><body>';
 
     // ========================================
-    // ✅ HALAMAN 1: SURAT JALAN (COMPACT UNTUK 21x14)
+    // ✅ HALAMAN 1: SURAT JALAN ELEGANT
     // ========================================
     
     $html .= '<div class="page-container">';
     
-    // HEADER SURAT JALAN (COMPACT)
-    $html .= '<table style="border: none;" class="compact-header">';
-    $html .= '<tr><td style="border: none; padding: 1mm;" class="header-company dot-matrix-bold">';
-    $html .= '<div class="medium">SJ-'.str_pad($id, 5, '0', STR_PAD_LEFT).' - '.strtoupper(e($sale->branch_name ?? 'TOKO')).'</div>'; // ✅ GABUNG TITLE
-    $html .= '<div class="tiny dot-matrix-text">WPC DINDING, ATAP UPVC, KACA BEVEL, HOLLO, VINYL, SPC | Telp: 0811 2287 2006</div>'; // ✅ SATU BARIS
-    $html .= '</td></tr></table>';
+    // ✅ DOCUMENT TITLE ELEGANT
+    $html .= '<div class="doc-title">SURAT JALAN</div>';
+    $html .= '<div class="center emphasis data-text">No: SJ-'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
+    
+    // ✅ COMPANY HEADER PROFESSIONAL
+    $html .= '<div class="company-header">';
+    $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
+    $html .= '<div class="small-text">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo</div>';
+    $html .= '<div class="small-text">Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
+    
+    if (!empty($sale->branch_address)) {
+        $html .= '<div class="small-text">'.e($sale->branch_address).'</div>';
+    }
+    
+    $html .= '<div class="small-text emphasis">Telp: 0811 2287 2006</div>';
+    $html .= '</div>';
 
-    // INFO SURAT JALAN (COMPACT)
-    $html .= '<table style="border: none;" class="compact-table">';
+    // ✅ SECTION SEPARATOR
+    $html .= '<div class="section-separator"></div>';
+
+    // ✅ CUSTOMER & DATE INFO ELEGANT
+    $html .= '<table class="no-border info-block">';
     $html .= '<tr>';
-    $html .= '<td style="border: none; width: 60%; padding: 1px;" class="dot-matrix-text">';
-    $html .= '<div class="small bold">Kepada: ';
+    $html .= '<td class="no-border" style="width: 60%; vertical-align: top;">';
+    $html .= '<div class="section-label">Kepada Yth:</div>';
     if ($sale->customer_name) {
-        $html .= strtoupper(e(substr($sale->customer_name, 0, 25))); // ✅ TRIM NAMA
+        $html .= '<div class="data-text emphasis">'.strtoupper(e($sale->customer_name)).'</div>';
         if ($sale->customer_phone) {
-            $html .= ' | HP: '.e(substr($sale->customer_phone, 0, 13)); // ✅ TRIM HP
+            $html .= '<div class="small-text">Telp: '.e($sale->customer_phone).'</div>';
         }
     } else {
-        $html .= 'PELANGGAN UMUM';
+        $html .= '<div class="data-text emphasis">PELANGGAN UMUM</div>';
     }
-    $html .= '</div>';
     $html .= '</td>';
-    $html .= '<td style="border: none; text-align: right; padding: 1px;" class="dot-matrix-text">';
-    $html .= '<div class="small bold">'.$todayDate.' | '.date('H:i').'</div>'; // ✅ SATU BARIS
+    $html .= '<td class="no-border right" style="width: 40%; vertical-align: top;">';
+    $html .= '<div class="section-label">Tanggal:</div>';
+    $html .= '<div class="data-text emphasis">'.$todayDate.'</div>';
+    $html .= '<div class="small-text">Jam: '.date('H:i').'</div>';
     $html .= '</td>';
     $html .= '</tr></table>';
 
-    // GARIS PEMISAH TIPIS
-    $html .= '<div class="dotted-line"></div>';
+    // ✅ DOTTED SEPARATOR
+    $html .= '<div class="dotted-separator"></div>';
 
-    // ✅ TABEL BARANG SURAT JALAN (ULTRA COMPACT)
-    $html .= '<table class="dot-matrix-text compact-table">';
+    // ✅ ITEMS TABLE ELEGANT - NO HEAVY BORDERS
+    $html .= '<table class="main-table">';
     $html .= '<thead><tr>';
-    $html .= '<th style="width:5%" class="center">NO</th>';
-    $html .= '<th style="width:15%">KODE</th>';
-    $html .= '<th style="width:55%">NAMA BARANG</th>';
-    $html .= '<th style="width:12%" class="center">QTY</th>';
-    $html .= '<th style="width:13%" class="center">SATUAN</th>';
+    $html .= '<th style="width:8%" class="center">No</th>';
+    $html .= '<th style="width:20%">Kode</th>';
+    $html .= '<th style="width:47%">Nama Barang</th>';
+    $html .= '<th style="width:12%" class="center">Qty</th>';
+    $html .= '<th style="width:13%" class="center">Satuan</th>';
     $html .= '</tr></thead><tbody>';
 
     $no = 1;
     foreach ($groupedLines as $item) {
-        $html .= '<tr class="compact-row">';
-        $html .= '<td class="center tiny">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
+        $html .= '<tr>';
+        $html .= '<td class="center emphasis">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
         
-        // KODE/SKU (COMPACT)
+        // KODE/SKU
         $displaySku = $item['sku'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
             $displaySku = 'LAYANAN';
         }
-        $html .= '<td class="small">'.e(substr($displaySku, 0, 12)).'</td>'; // ✅ TRIM SKU
+        $html .= '<td class="emphasis">'.e($displaySku).'</td>';
         
-        // NAMA PRODUK (ULTRA COMPACT)
+        // NAMA PRODUK
         $displayName = $item['name'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
             $displayName = count($actualServiceNames) === 1
@@ -536,24 +596,24 @@ public function invoice($id)
         }
         
         $html .= '<td>';
-        $html .= '<div class="small">'.e(substr($displayName, 0, 35)).'</div>'; // ✅ TRIM NAMA
+        $html .= '<div class="emphasis">'.e($displayName).'</div>';
         
-        // INFO SISA JIKA ADA (INLINE)
+        // INFO SISA JIKA ADA
         if ($item['qty_sisa'] > 0) {
-            $html .= '<div class="tiny" style="color: #666;">+Sisa: '.number_format($item['qty_sisa'], 1).'m</div>';
+            $html .= '<div class="small-text">Sisa material: '.number_format($item['qty_sisa'], 2).' meter</div>';
         }
         $html .= '</td>';
         
-        // QUANTITY (COMPACT)
+        // QUANTITY
         if ($item['is_service']) {
-            $html .= '<td class="center tiny">1</td>';
-            $html .= '<td class="center tiny">LAYANAN</td>';
+            $html .= '<td class="center">1</td>';
+            $html .= '<td class="center">Layanan</td>';
         } else if ($item['qty_material'] > 0) {
-            $html .= '<td class="center tiny">'.number_format($item['qty_material'], 0).'</td>';
-            $html .= '<td class="center tiny">PCS</td>';
+            $html .= '<td class="center emphasis">'.number_format($item['qty_material'], 0).'</td>';
+            $html .= '<td class="center">Pcs</td>';
         } else {
-            $html .= '<td class="center tiny">-</td>';
-            $html .= '<td class="center tiny">-</td>';
+            $html .= '<td class="center">-</td>';
+            $html .= '<td class="center">-</td>';
         }
         
         $html .= '</tr>';
@@ -561,94 +621,108 @@ public function invoice($id)
     }
     $html .= '</tbody></table>';
 
-    // RINGKASAN SURAT JALAN (INLINE)
-    $html .= '<table style="border: 1px solid #000; margin: 1mm 0;" class="dot-matrix-text compact-table">';
-    $html .= '<tr><td style="border: none; padding: 1mm;" class="center">';
-    $html .= '<div class="small bold">TOTAL: '.count($groupedLines).' ('.$this->terbilang(count($groupedLines)).') Jenis</div>'; // ✅ SINGKAT
-    $html .= '</td></tr></table>';
+    // ✅ SUMMARY ELEGANT
+    $html .= '<div class="total-block">';
+    $html .= '<div class="center emphasis">Total Barang: '.count($groupedLines).' ('.$this->terbilang(count($groupedLines)).') Jenis</div>';
+    $html .= '</div>';
 
-    // ✅ SIGNATURE COMPACT UNTUK 21x14
-    $html .= '<table style="border: none; margin-top: 1mm;" class="dot-matrix-text">';
+    // ✅ NOTES & SIGNATURES ELEGANT
+    $html .= '<table class="no-border signature-area">';
     $html .= '<tr>';
-    $html .= '<td style="border: none; width: 40%; padding: 1px; vertical-align: top;">';
-    $html .= '<div class="tiny bold">Keterangan:</div>';
+    $html .= '<td class="no-border" style="width: 50%; vertical-align: top;">';
+    $html .= '<div class="section-label">Keterangan:</div>';
     if (!empty($sale->notes)) {
         $cleanNotes = preg_replace('/\|\s*KEMBALIAN:.*$/i', '', $sale->notes);
         $cleanNotes = trim($cleanNotes);
         if (!empty($cleanNotes)) {
-            $html .= '<div class="tiny">'.e(substr($cleanNotes, 0, 40)).'</div>'; // ✅ TRIM NOTES
+            $html .= '<div class="small-text">'.nl2br(e($cleanNotes)).'</div>';
         }
     } else {
-        $html .= '<div class="tiny">Barang diterima baik</div>';
+        $html .= '<div class="small-text">Barang diterima dalam keadaan baik</div>';
     }
     $html .= '</td>';
     
-    // SIGNATURES (COMPACT)
-    $html .= '<td style="border: none; width: 30%; text-align: center; padding: 1px;" class="signature-section">';
-    $html .= '<div class="tiny bold">PENYERAH</div>';
+    // SIGNATURES
+    $html .= '<td class="no-border" style="width: 25%; vertical-align: top;">';
+    $html .= '<div class="signature-label">Yang Menyerahkan</div>';
     $html .= '<div class="signature-box"></div>';
-    $html .= '<div class="signature-name tiny">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>';
+    $html .= '<div class="signature-name">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>';
     $html .= '</td>';
 
-    $html .= '<td style="border: none; width: 30%; text-align: center; padding: 1px;" class="signature-section">';
-    $html .= '<div class="tiny bold">PENERIMA</div>';
+    $html .= '<td class="no-border" style="width: 25%; vertical-align: top;">';
+    $html .= '<div class="signature-label">Yang Menerima</div>';
     $html .= '<div class="signature-box"></div>';
-    $html .= '<div class="signature-name tiny">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>';
+    $html .= '<div class="signature-name">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>';
     $html .= '</td>';
     $html .= '</tr></table>';
     
     $html .= '</div>'; // End page-container
 
     // ========================================
-    // ✅ HALAMAN 2: INVOICE (COMPACT UNTUK 21x14)
+    // ✅ HALAMAN 2: INVOICE ELEGANT
     // ========================================
     
     $html .= '<div class="page-container new-page">';
 
-    // HEADER INVOICE (COMPACT)
-    $html .= '<table style="border: none;" class="compact-header">';
-    $html .= '<tr><td style="border: none; padding: 1mm;" class="header-company dot-matrix-bold">';
-    $html .= '<div class="medium">INVOICE #'.str_pad($id, 5, '0', STR_PAD_LEFT).' - '.strtoupper(e($sale->branch_name ?? 'TOKO')).'</div>'; // ✅ GABUNG
-    $html .= '<div class="tiny dot-matrix-text">WPC DINDING, ATAP UPVC, KACA BEVEL, HOLLO, VINYL, SPC | Telp: 0811 2287 2006</div>';
-    $html .= '</td></tr></table>';
-
-    // INFO INVOICE (COMPACT)
-    $html .= '<table style="border: none;" class="compact-table">';
-    $html .= '<tr>';
-    $html .= '<td style="border: none; width: 50%; padding: 1px;" class="dot-matrix-text">';
-    $html .= '<div class="small bold">Tanggal: '.date('d/m/Y H:i', strtotime($sale->sale_datetime)).'</div>';
-    $html .= '</td>';
-    $html .= '<td style="border: none; text-align: right; padding: 1px;" class="dot-matrix-text">';
+    // ✅ DOCUMENT TITLE ELEGANT
+    $html .= '<div class="doc-title">FAKTUR PENJUALAN</div>';
+    $html .= '<div class="center emphasis data-text">Invoice #'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
     
-    // INFO PELANGGAN (COMPACT)
+    // ✅ COMPANY HEADER PROFESSIONAL
+    $html .= '<div class="company-header">';
+    $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
+    $html .= '<div class="small-text">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo</div>';
+    $html .= '<div class="small-text">Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
+    
+    if (!empty($sale->branch_address)) {
+        $html .= '<div class="small-text">'.e($sale->branch_address).'</div>';
+    }
+    
+    $html .= '<div class="small-text emphasis">Telp: 0811 2287 2006</div>';
+    $html .= '</div>';
+
+    // ✅ SECTION SEPARATOR
+    $html .= '<div class="section-separator"></div>';
+
+    // ✅ INVOICE INFO ELEGANT
+    $html .= '<table class="no-border info-block">';
+    $html .= '<tr>';
+    $html .= '<td class="no-border" style="width: 50%; vertical-align: top;">';
+    $html .= '<div class="section-label">Tanggal Transaksi:</div>';
+    $html .= '<div class="data-text emphasis">'.$saleDate.'</div>';
+    $html .= '</td>';
+    $html .= '<td class="no-border right" style="width: 50%; vertical-align: top;">';
+    
+    // CUSTOMER INFO
+    $html .= '<div class="section-label">Pelanggan:</div>';
     if ($sale->customer_name) {
-        $html .= '<div class="small bold">'.e(substr($sale->customer_name, 0, 20)).'</div>'; // ✅ TRIM NAMA
+        $html .= '<div class="data-text emphasis">'.e($sale->customer_name).'</div>';
         if ($sale->customer_phone) {
-            $html .= '<div class="tiny">'.e(substr($sale->customer_phone, 0, 13)).'</div>'; // ✅ TRIM HP
+            $html .= '<div class="small-text">Telp: '.e($sale->customer_phone).'</div>';
         }
     } else {
-        $html .= '<div class="small bold">UMUM</div>';
+        $html .= '<div class="data-text emphasis">Pelanggan Umum</div>';
     }
     
     $html .= '</td>';
     $html .= '</tr></table>';
 
-    // GARIS PEMISAH TIPIS
-    $html .= '<div class="dotted-line"></div>';
+    // ✅ DOTTED SEPARATOR
+    $html .= '<div class="dotted-separator"></div>';
 
-    // ✅ TABEL PRODUK INVOICE (ULTRA COMPACT)
-    $html .= '<table class="dot-matrix-text compact-table">';
+    // ✅ PRODUCTS TABLE ELEGANT
+    $html .= '<table class="main-table">';
     $html .= '<thead><tr>';
-    $html .= '<th style="width:40%">PRODUK</th>';
-    $html .= '<th class="center" style="width:12%">QTY</th>';
-    $html .= '<th class="right" style="width:24%">HARGA</th>';
-    $html .= '<th class="right" style="width:24%">SUBTOTAL</th>';
+    $html .= '<th style="width:40%">Nama Produk</th>';
+    $html .= '<th class="center" style="width:12%">Qty</th>';
+    $html .= '<th class="right" style="width:24%">Harga Satuan</th>';
+    $html .= '<th class="right" style="width:24%">Subtotal</th>';
     $html .= '</tr></thead><tbody>';
 
     foreach ($groupedLines as $item) {
-        $html .= '<tr class="compact-row">';
+        $html .= '<tr>';
         
-        // NAMA PRODUK (ULTRA COMPACT)
+        // NAMA PRODUK
         $displayName = $item['name'];
         $displaySku = $item['sku'];
         
@@ -660,85 +734,88 @@ public function invoice($id)
         }
         
         $html .= '<td>';
-        $html .= '<div class="small">'.e(substr($displayName, 0, 25)).'</div>'; // ✅ TRIM NAMA
-        $html .= '<div class="tiny">('.e(substr($displaySku, 0, 8)).')</div>'; // ✅ TRIM SKU
+        $html .= '<div class="emphasis">'.e($displayName).'</div>';
+        $html .= '<div class="small-text">('.e($displaySku).')</div>';
         
-        // INFO SISA JIKA ADA (INLINE)
+        // INFO SISA JIKA ADA
         if ($item['qty_sisa'] > 0) {
-            $html .= '<div class="tiny" style="color: #666;">+'.number_format($item['qty_sisa'], 1).'m</div>';
+            $html .= '<div class="small-text">Sisa: '.number_format($item['qty_sisa'], 2).' meter</div>';
         }
         
         $html .= '</td>';
         
-        // QUANTITY (COMPACT)
+        // QUANTITY
         if ($item['is_service']) {
-            $html .= '<td class="center tiny">1 SRV</td>';
+            $html .= '<td class="center">1 Layanan</td>';
         } else if ($item['qty_material'] > 0) {
-            $html .= '<td class="center tiny">'.number_format($item['qty_material'], 0).'</td>';
+            $html .= '<td class="center emphasis">'.number_format($item['qty_material'], 0).'</td>';
         } else {
-            $html .= '<td class="center tiny">-</td>';
+            $html .= '<td class="center">-</td>';
         }
         
-        $html .= '<td class="right tiny">'.number_format($item['display_price'], 0, ',', '.').'</td>';
-        $html .= '<td class="right small bold">'.number_format($item['total_subtotal'], 0, ',', '.').'</td>';
+        $html .= '<td class="right">Rp '.number_format($item['display_price'], 0, ',', '.').'</td>';
+        $html .= '<td class="right emphasis">Rp '.number_format($item['total_subtotal'], 0, ',', '.').'</td>';
         $html .= '</tr>';
     }
     $html .= '</tbody></table>';
 
-    // ✅ RINGKASAN TOTAL INVOICE (COMPACT)
-    $html .= '<table style="border: none; margin: 1mm 0;" class="total-section compact-table">';
-    $html .= '<tr><td style="border: none; width: 40%;"></td>';
-    $html .= '<td style="border: none; text-align: right; padding: 1px;">';
+    // ✅ TOTAL CALCULATION ELEGANT
+    $html .= '<table class="no-border" style="margin-top: 3mm;">';
+    $html .= '<tr><td class="no-border" style="width: 60%;"></td>';
+    $html .= '<td class="no-border" style="width: 40%;">';
     
-    $html .= '<table style="border: 1px solid #000;" class="dot-matrix-text">';
-    $html .= '<tr><td style="border-bottom: 1px solid #000; padding: 1px;" class="tiny">Subtotal:</td>';
-    $html .= '<td class="right small bold" style="border-bottom: 1px solid #000; padding: 1px;">Rp '.number_format($calculatedSubtotal, 0, ',', '.').'</td></tr>';
+    $html .= '<div class="total-block">';
+    $html .= '<table class="no-border">';
+    $html .= '<tr><td class="no-border">Subtotal:</td>';
+    $html .= '<td class="no-border right emphasis">Rp '.number_format($calculatedSubtotal, 0, ',', '.').'</td></tr>';
     
     if ($discount > 0) {
-        $html .= '<tr><td style="border-bottom: 1px solid #000; padding: 1px;" class="tiny">Diskon:</td>';
-        $html .= '<td class="right tiny" style="border-bottom: 1px solid #000; padding: 1px;">-Rp '.number_format($discount, 0, ',', '.').'</td></tr>';
+        $html .= '<tr><td class="no-border">Potongan:</td>';
+        $html .= '<td class="no-border right">Rp '.number_format($discount, 0, ',', '.').'</td></tr>';
     }
     
-    $html .= '<tr><td class="small bold" style="border-bottom: none; padding: 1px;">TOTAL:</td>';
-    $html .= '<td class="right small bold" style="border-bottom: none; padding: 1px;">Rp '.number_format($finalTotal, 0, ',', '.').'</td></tr>';
+    $html .= '<tr style="border-top: 1px solid #000;"><td class="no-border emphasis section-label">TOTAL BAYAR:</td>';
+    $html .= '<td class="no-border right emphasis section-label">Rp '.number_format($finalTotal, 0, ',', '.').'</td></tr>';
     
     if ($changeAmount > 0) {
-        $html .= '<tr><td style="border-bottom: none; padding: 1px;" class="tiny">Kembalian:</td>';
-        $html .= '<td class="right tiny" style="border-bottom: none; padding: 1px;">Rp '.number_format($changeAmount, 0, ',', '.').'</td></tr>';
+        $html .= '<tr><td class="no-border">Kembalian:</td>';
+        $html .= '<td class="no-border right">Rp '.number_format($changeAmount, 0, ',', '.').'</td></tr>';
     }
     
     $html .= '</table>';
+    $html .= '</div>';
     $html .= '</td></tr></table>';
 
-    // INFO PEMBAYARAN (COMPACT)
-    $html .= '<table style="border: 1px solid #000; margin: 1mm 0;" class="dot-matrix-text compact-table">';
-    $html .= '<tr><td style="border: none; padding: 1mm; text-align: center;">';
-    $html .= '<div class="small bold">TRANSFER BCA: 4181380637 (YADI MULYADI)</div>'; // ✅ SATU BARIS
-    $html .= '</td></tr></table>';
+    // ✅ PAYMENT INFO ELEGANT
+    $html .= '<div class="payment-info">';
+    $html .= '<div class="section-label">Informasi Pembayaran</div>';
+    $html .= '<div class="data-text">Transfer Bank BCA: <span class="emphasis">4181380637</span></div>';
+    $html .= '<div class="small-text">Atas Nama: YADI MULYADI</div>';
+    $html .= '</div>';
 
-    // ✅ FOOTER INVOICE (SIGNATURE COMPACT)
-    $html .= '<table style="border: none; margin-top: 1mm;" class="dot-matrix-text signature-section">';
+    // ✅ NOTES & SIGNATURE ELEGANT
+    $html .= '<table class="no-border signature-area">';
     $html .= '<tr>';
-    $html .= '<td style="border: none; width: 50%; padding: 1px; vertical-align: top;">';
+    $html .= '<td class="no-border" style="width: 60%; vertical-align: top;">';
     
-    // CATATAN JIKA ADA (COMPACT)
+    // CATATAN JIKA ADA
     if (!empty($sale->notes)) {
         $cleanNotes = preg_replace('/\|\s*KEMBALIAN:.*$/i', '', $sale->notes);
         $cleanNotes = trim($cleanNotes);
         
         if (!empty($cleanNotes)) {
-            $html .= '<div class="tiny bold">Catatan:</div>';
-            $html .= '<div class="tiny">'.e(substr($cleanNotes, 0, 35)).'</div>'; // ✅ TRIM NOTES
+            $html .= '<div class="section-label">Catatan:</div>';
+            $html .= '<div class="small-text">'.nl2br(e($cleanNotes)).'</div>';
         }
     }
     
     $html .= '</td>';
     
-    // SIGNATURE AREA (COMPACT)
-    $html .= '<td style="border: none; width: 50%; text-align: center; padding: 1px; vertical-align: top;">';
-    $html .= '<div class="tiny">Hormat kami,</div>';
+    // SIGNATURE AREA
+    $html .= '<td class="no-border" style="width: 40%; vertical-align: top;">';
+    $html .= '<div class="signature-label">Hormat Kami,</div>';
     $html .= '<div class="signature-box"></div>';
-    $html .= '<div class="signature-name tiny bold">Tanda Tangan & Stempel</div>';
+    $html .= '<div class="signature-name emphasis">Tanda Tangan & Stempel</div>';
     $html .= '</td>';
     $html .= '</tr></table>';
     
@@ -749,7 +826,7 @@ public function invoice($id)
         window.addEventListener("load", function() {
             setTimeout(function() {
                 window.print();
-            }, 500); // ✅ LEBIH CEPAT
+            }, 800);
         });
     </script>';
 
