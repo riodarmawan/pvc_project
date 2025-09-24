@@ -194,7 +194,7 @@ return response()->json([
 
 
 /** Cetak invoice + surat jalan (html sederhana, siap print) */
-public function invoice($id)
+public function invoice(Request $request, $id)
 {
     // [LOGIC PENGOLAHAN DATA SAMA - TIDAK BERUBAH]
     $id = (int)$id;
@@ -282,32 +282,47 @@ public function invoice($id)
     $saleDate = date('d/m/Y H:i', strtotime($sale->sale_datetime));
     $todayDate = date('d/m/Y');
 
-    $itemCount = count($groupedLines);
-   
-    $titleFont = 14;
-    $headerFont = 12;
-    $labelFont = 10;
-    $dataFont = 9;
-    $tableFont = 9;
-    $smallFont = 8;
+// ✅ SESUDAH - Dengan kontrol query parameter
+$itemCount = count($groupedLines);
 
-    if ($itemCount > 15) {
-        $titleFont = 12;
-        $headerFont = 10;
-        $labelFont = 9;
-        $dataFont = 8;
-        $tableFont = 8;
-        $smallFont = 7;
-    }
-    
-    if ($itemCount > 25) {
-        $titleFont = 11;
-        $headerFont = 9;
-        $labelFont = 8;
-        $dataFont = 7;
-        $tableFont = 7;
-        $smallFont = 6;
-    }
+// ✅ AMBIL FONT SIZE DARI QUERY PARAMETER (default = 0)
+$fontAdjustment = (int) ($request->query('font', 0));
+
+// ✅ BASE FONT SIZES
+$titleFont = 14 + $fontAdjustment;
+$headerFont = 12 + $fontAdjustment;
+$labelFont = 10 + $fontAdjustment;
+$dataFont = 9 + $fontAdjustment;
+$tableFont = 9 + $fontAdjustment;
+$smallFont = 8 + $fontAdjustment;
+
+// ✅ DYNAMIC SCALING BERDASARKAN JUMLAH ITEM (dengan adjustment)
+if ($itemCount > 15) {
+    $titleFont = 12 + $fontAdjustment;
+    $headerFont = 10 + $fontAdjustment;
+    $labelFont = 9 + $fontAdjustment;
+    $dataFont = 8 + $fontAdjustment;
+    $tableFont = 8 + $fontAdjustment;
+    $smallFont = 7 + $fontAdjustment;
+}
+
+if ($itemCount > 25) {
+    $titleFont = 11 + $fontAdjustment;
+    $headerFont = 9 + $fontAdjustment;
+    $labelFont = 8 + $fontAdjustment;
+    $dataFont = 7 + $fontAdjustment;
+    $tableFont = 7 + $fontAdjustment;
+    $smallFont = 6 + $fontAdjustment;
+}
+
+// ✅ VALIDASI: Minimal font size 6px
+$titleFont = max(6, $titleFont);
+$headerFont = max(6, $headerFont);
+$labelFont = max(6, $labelFont);
+$dataFont = max(6, $dataFont);
+$tableFont = max(6, $tableFont);
+$smallFont = max(6, $smallFont);
+
 
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
     $html .= '<title>Invoice + Surat Jalan #'.$id.'</title>';
