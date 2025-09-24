@@ -196,7 +196,6 @@ return response()->json([
 /** Cetak invoice + surat jalan (html sederhana, siap print) */
 public function invoice(Request $request, $id)
 {
-    // [LOGIC PENGOLAHAN DATA SAMA - TIDAK BERUBAH]
     $id = (int)$id;
     $allowed = $this->allowedBranchIds();
    
@@ -282,55 +281,66 @@ public function invoice(Request $request, $id)
     $saleDate = date('d/m/Y H:i', strtotime($sale->sale_datetime));
     $todayDate = date('d/m/Y');
 
-// ✅ SESUDAH - Dengan kontrol query parameter
-$itemCount = count($groupedLines);
+    $itemCount = count($groupedLines);
 
-// ✅ AMBIL FONT SIZE DARI QUERY PARAMETER (default = 0)
-$fontAdjustment = (int) ($request->query('font', 0));
+    // ✅ AMBIL FONT ADJUSTMENT DARI QUERY PARAMETER
+    $fontAdjustment = (int) ($request->query('font', 0));
+    
+    // ✅ LIMIT FONT ADJUSTMENT (-3 sampai +3 untuk safety)
+    $fontAdjustment = max(-3, min(3, $fontAdjustment));
 
-// ✅ BASE FONT SIZES
-$titleFont = 14 + $fontAdjustment;
-$headerFont = 12 + $fontAdjustment;
-$labelFont = 10 + $fontAdjustment;
-$dataFont = 9 + $fontAdjustment;
-$tableFont = 9 + $fontAdjustment;
-$smallFont = 8 + $fontAdjustment;
+    // ✅ BASE FONT SIZES DENGAN ADJUSTMENT
+    $titleFont = 14 + $fontAdjustment;
+    $headerFont = 12 + $fontAdjustment;
+    $labelFont = 10 + $fontAdjustment;
+    $dataFont = 9 + $fontAdjustment;
+    $tableFont = 9 + $fontAdjustment;
+    $smallFont = 8 + $fontAdjustment;
 
-// ✅ DYNAMIC SCALING BERDASARKAN JUMLAH ITEM (dengan adjustment)
-if ($itemCount > 15) {
-    $titleFont = 12 + $fontAdjustment;
-    $headerFont = 10 + $fontAdjustment;
-    $labelFont = 9 + $fontAdjustment;
-    $dataFont = 8 + $fontAdjustment;
-    $tableFont = 8 + $fontAdjustment;
-    $smallFont = 7 + $fontAdjustment;
-}
+    // ✅ DYNAMIC SCALING BERDASARKAN JUMLAH ITEM
+    if ($itemCount > 15) {
+        $titleFont = 12 + $fontAdjustment;
+        $headerFont = 10 + $fontAdjustment;
+        $labelFont = 9 + $fontAdjustment;
+        $dataFont = 8 + $fontAdjustment;
+        $tableFont = 8 + $fontAdjustment;
+        $smallFont = 7 + $fontAdjustment;
+    }
+    
+    if ($itemCount > 25) {
+        $titleFont = 11 + $fontAdjustment;
+        $headerFont = 9 + $fontAdjustment;
+        $labelFont = 8 + $fontAdjustment;
+        $dataFont = 7 + $fontAdjustment;
+        $tableFont = 7 + $fontAdjustment;
+        $smallFont = 6 + $fontAdjustment;
+    }
 
-if ($itemCount > 25) {
-    $titleFont = 11 + $fontAdjustment;
-    $headerFont = 9 + $fontAdjustment;
-    $labelFont = 8 + $fontAdjustment;
-    $dataFont = 7 + $fontAdjustment;
-    $tableFont = 7 + $fontAdjustment;
-    $smallFont = 6 + $fontAdjustment;
-}
+    // ✅ VALIDASI MINIMAL FONT SIZE
+    $titleFont = max(6, $titleFont);
+    $headerFont = max(6, $headerFont);
+    $labelFont = max(6, $labelFont);
+    $dataFont = max(6, $dataFont);
+    $tableFont = max(6, $tableFont);
+    $smallFont = max(6, $smallFont);
 
-// ✅ VALIDASI: Minimal font size 6px
-$titleFont = max(6, $titleFont);
-$headerFont = max(6, $headerFont);
-$labelFont = max(6, $labelFont);
-$dataFont = max(6, $dataFont);
-$tableFont = max(6, $tableFont);
-$smallFont = max(6, $smallFont);
-
+    // ✅ ADAPTIVE SPACING BERDASARKAN FONT SIZE
+    // Semakin besar font, semakin kecil margin/padding agar tetap fit
+    $baseSpacing = max(0.5, 2 - ($fontAdjustment * 0.3)); // 2mm default, berkurang jika font besar
+    $tablePadding = max(0.3, 1 - ($fontAdjustment * 0.2)); // 1mm default, berkurang jika font besar
+    $sectionMargin = max(0.5, 2 - ($fontAdjustment * 0.4)); // 2mm default, berkurang jika font besar
+    
+    // ✅ ADAPTIVE LINE HEIGHT
+    $lineHeight = max(0.9, 1.0 - ($fontAdjustment * 0.02)); // Line height berkurang jika font besar
 
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
     $html .= '<title>Invoice + Surat Jalan #'.$id.'</title>';
     
+    // ✅ CSS ADAPTIVE - MARGIN DAN SPACING MENYESUAIKAN FONT
     $html .= '<style>
         @page {
             size: 21cm 14cm;
-            margin: 5mm;
+            margin: '.max(3, 5 - $fontAdjustment).'mm;
         }
         
         * {
@@ -343,14 +353,14 @@ $smallFont = max(6, $smallFont);
             font-family: "Courier New", "Consolas", monospace;
             font-size: '.$dataFont.'px;
             font-weight: bold;
-            line-height: 1.0;
+            line-height: '.$lineHeight.';
             color: #000;
             letter-spacing: 0.1px;
         }
         
         .page-container {
-            width: 20cm;
-            height: 13cm;
+            width: '.(20 + ($fontAdjustment * 0.2)).'cm;
+            height: '.(13 + ($fontAdjustment * 0.1)).'cm;
             margin: 0;
             padding: 0;
             overflow: hidden;
@@ -363,7 +373,7 @@ $smallFont = max(6, $smallFont);
         @media print {
             @page { 
                 size: 21cm 14cm;
-                margin: 5mm;
+                margin: '.max(3, 5 - $fontAdjustment).'mm;
             }
             
             body { 
@@ -371,6 +381,7 @@ $smallFont = max(6, $smallFont);
                 padding: 0;
                 -webkit-print-color-adjust: exact;
                 font-weight: bold !important;
+                line-height: '.$lineHeight.' !important;
             }
             
             .page-container {
@@ -382,15 +393,15 @@ $smallFont = max(6, $smallFont);
     </style></head><body>';
 
     // ========================================
-    // ✅ HALAMAN 1: SURAT JALAN
+    // ✅ HALAMAN 1: SURAT JALAN - ADAPTIVE SPACING
     // ========================================
     
     $html .= '<div class="page-container">';
     
-    $html .= '<div style="font-size: '.$titleFont.'px; font-weight: bold; text-align: center; margin-bottom: 1mm;">SURAT JALAN</div>';
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin-bottom: 1mm;">No: SJ-'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
+    $html .= '<div style="font-size: '.$titleFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$baseSpacing.'mm;">SURAT JALAN</div>';
+    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin-bottom: '.$baseSpacing.'mm;">No: SJ-'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
     
-    $html .= '<div style="font-size: '.$headerFont.'px; font-weight: bold; text-align: center; margin-bottom: 2mm;">';
+    $html .= '<div style="font-size: '.$headerFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$sectionMargin.'mm;">';
     $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
     $html .= '<div style="font-size: '.$smallFont.'px;">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo, Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
     
@@ -401,9 +412,9 @@ $smallFont = max(6, $smallFont);
     $html .= '<div style="font-size: '.$smallFont.'px; font-weight: bold;">Telp: 0811 2287 2006</div>';
     $html .= '</div>';
 
-    $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
+    $html .= '<div style="border-top: 2px solid #000; margin: '.$sectionMargin.'mm 0;"></div>';
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-bottom: 1mm;">';
+    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-bottom: '.$baseSpacing.'mm;">';
     $html .= '<tr>';
     $html .= '<td style="width: 50%; border: none;">KEPADA: ';
     if ($sale->customer_name) {
@@ -418,30 +429,28 @@ $smallFont = max(6, $smallFont);
     $html .= '<td style="width: 50%; text-align: right; border: none;">TANGGAL: '.$todayDate.' | '.date('H:i').'</td>';
     $html .= '</tr></table>';
 
-    // ✅ TABEL SURAT JALAN - WIDTH 100% FIT DENGAN BORDER
+    // ✅ TABEL SURAT JALAN - ADAPTIVE PADDING
     $html .= '<table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #000; font-size: '.$tableFont.'px; font-weight: bold;">';
     
     $html .= '<thead><tr style="border-bottom: 1px solid #000;">';
-    $html .= '<th style="width: 6%; text-align: center; padding: 1mm 0.5mm; border-right: 1px solid #000; background: #f0f0f0;">NO</th>';
-    $html .= '<th style="width: 13%; padding: 1mm 0.5mm; border-right: 1px solid #000; background: #f0f0f0;">KODE</th>';
-    $html .= '<th style="width: 56%; padding: 1mm 0.5mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA BARANG</th>';
-    $html .= '<th style="width: 12%; text-align: center; padding: 1mm 0.5mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
-    $html .= '<th style="width: 13%; text-align: center; padding: 1mm 0.5mm; background: #f0f0f0;">SATUAN</th>';
+    $html .= '<th style="width: 6%; text-align: center; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">NO</th>';
+    $html .= '<th style="width: 13%; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">KODE</th>';
+    $html .= '<th style="width: 56%; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA BARANG</th>';
+    $html .= '<th style="width: 12%; text-align: center; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
+    $html .= '<th style="width: 13%; text-align: center; padding: '.$tablePadding.'mm; background: #f0f0f0;">SATUAN</th>';
     $html .= '</tr></thead><tbody>';
 
     $no = 1;
     foreach ($groupedLines as $item) {
         $html .= '<tr>';
-        $html .= '<td style="width: 6%; text-align: center; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
+        $html .= '<td style="width: 6%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
         
-        // KODE
         $displaySku = $item['sku'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
             $displaySku = 'LAYANAN';
         }
-        $html .= '<td style="width: 13%; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.e($displaySku).'</td>';
+        $html .= '<td style="width: 13%; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.e($displaySku).'</td>';
         
-        // ✅ NAMA BARANG - WIDTH 56% SEKARANG FIT
         $displayName = $item['name'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
             $displayName = count($actualServiceNames) === 1
@@ -453,18 +462,17 @@ $smallFont = max(6, $smallFont);
         if ($item['qty_sisa'] > 0) {
             $nameText .= ' (Sisa: '.number_format($item['qty_sisa'], 2).' m)';
         }
-        $html .= '<td style="width: 56%; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
+        $html .= '<td style="width: 56%; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
         
-        // QTY & SATUAN
         if ($item['is_service']) {
-            $html .= '<td style="width: 12%; text-align: center; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1</td>';
-            $html .= '<td style="width: 13%; text-align: center; padding: 0.5mm; border-bottom: 1px dotted #ccc;">Layanan</td>';
+            $html .= '<td style="width: 12%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1</td>';
+            $html .= '<td style="width: 13%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">Layanan</td>';
         } else if ($item['qty_material'] > 0) {
-            $html .= '<td style="width: 12%; text-align: center; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
-            $html .= '<td style="width: 13%; text-align: center; padding: 0.5mm; border-bottom: 1px dotted #ccc;">Pcs</td>';
+            $html .= '<td style="width: 12%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
+            $html .= '<td style="width: 13%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">Pcs</td>';
         } else {
-            $html .= '<td style="width: 12%; text-align: center; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
-            $html .= '<td style="width: 13%; text-align: center; padding: 0.5mm; border-bottom: 1px dotted #ccc;">-</td>';
+            $html .= '<td style="width: 12%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
+            $html .= '<td style="width: 13%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">-</td>';
         }
         
         $html .= '</tr>';
@@ -472,11 +480,11 @@ $smallFont = max(6, $smallFont);
     }
     $html .= '</tbody></table>';
 
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin: 2mm 0; border: 1px solid #000; padding: 1mm;">';
+    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin: '.$sectionMargin.'mm 0; border: 1px solid #000; padding: '.$baseSpacing.'mm;">';
     $html .= 'Total Barang: '.count($groupedLines).' ('.$this->terbilang(count($groupedLines)).') Jenis';
     $html .= '</div>';
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: 2mm; font-size: '.$smallFont.'px; font-weight: bold;">';
+    $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: '.$sectionMargin.'mm; font-size: '.$smallFont.'px; font-weight: bold;">';
     $html .= '<tr>';
     $html .= '<td style="width: 40%; border: none;">KETERANGAN: ';
     if (!empty($sale->notes)) {
@@ -504,15 +512,15 @@ $smallFont = max(6, $smallFont);
     $html .= '</div>'; // End page-container
 
     // ========================================
-    // ✅ HALAMAN 2: INVOICE
+    // ✅ HALAMAN 2: INVOICE - ADAPTIVE SPACING
     // ========================================
     
     $html .= '<div class="page-container new-page">';
 
-    $html .= '<div style="font-size: '.$titleFont.'px; font-weight: bold; text-align: center; margin-bottom: 1mm;">FAKTUR PENJUALAN</div>';
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin-bottom: 1mm;">Invoice #'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
+    $html .= '<div style="font-size: '.$titleFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$baseSpacing.'mm;">FAKTUR PENJUALAN</div>';
+    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin-bottom: '.$baseSpacing.'mm;">Invoice #'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
     
-    $html .= '<div style="font-size: '.$headerFont.'px; font-weight: bold; text-align: center; margin-bottom: 2mm;">';
+    $html .= '<div style="font-size: '.$headerFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$sectionMargin.'mm;">';
     $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
     $html .= '<div style="font-size: '.$smallFont.'px;">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo, Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
     
@@ -523,9 +531,9 @@ $smallFont = max(6, $smallFont);
     $html .= '<div style="font-size: '.$smallFont.'px; font-weight: bold;">Telp: 0811 2287 2006</div>';
     $html .= '</div>';
 
-    $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
+    $html .= '<div style="border-top: 2px solid #000; margin: '.$sectionMargin.'mm 0;"></div>';
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-bottom: 1mm;">';
+    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-bottom: '.$baseSpacing.'mm;">';
     $html .= '<tr>';
     $html .= '<td style="width: 50%; border: none;">TANGGAL: '.$saleDate.'</td>';
     $html .= '<td style="width: 50%; text-align: right; border: none;">PELANGGAN: ';
@@ -540,20 +548,19 @@ $smallFont = max(6, $smallFont);
     $html .= '</td>';
     $html .= '</tr></table>';
 
-    // ✅ TABEL INVOICE - WIDTH 100% FIT DENGAN BORDER
+    // ✅ TABEL INVOICE - ADAPTIVE PADDING
     $html .= '<table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #000; font-size: '.$tableFont.'px; font-weight: bold;">';
     
     $html .= '<thead><tr style="border-bottom: 1px solid #000;">';
-    $html .= '<th style="width: 52%; padding: 1mm 0.5mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA PRODUK</th>';
-    $html .= '<th style="width: 15%; text-align: center; padding: 1mm 0.5mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
-    $html .= '<th style="width: 16%; text-align: right; padding: 1mm 0.5mm; border-right: 1px solid #000; background: #f0f0f0;">HARGA</th>';
-    $html .= '<th style="width: 17%; text-align: right; padding: 1mm 0.5mm; background: #f0f0f0;">SUBTOTAL</th>';
+    $html .= '<th style="width: 52%; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA PRODUK</th>';
+    $html .= '<th style="width: 15%; text-align: center; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
+    $html .= '<th style="width: 16%; text-align: right; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">HARGA</th>';
+    $html .= '<th style="width: 17%; text-align: right; padding: '.$tablePadding.'mm; background: #f0f0f0;">SUBTOTAL</th>';
     $html .= '</tr></thead><tbody>';
 
     foreach ($groupedLines as $item) {
         $html .= '<tr>';
         
-        // ✅ NAMA PRODUK - WIDTH 52% FIT
         $displayName = $item['name'];
         $displaySku = $item['sku'];
         
@@ -568,27 +575,25 @@ $smallFont = max(6, $smallFont);
         if ($item['qty_sisa'] > 0) {
             $nameText .= ' [Sisa: '.number_format($item['qty_sisa'], 2).'m]';
         }
-        $html .= '<td style="width: 52%; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
+        $html .= '<td style="width: 52%; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
         
-        // QTY
         if ($item['is_service']) {
-            $html .= '<td style="width: 15%; text-align: center; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1 Layanan</td>';
+            $html .= '<td style="width: 15%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1 Layanan</td>';
         } else if ($item['qty_material'] > 0) {
-            $html .= '<td style="width: 15%; text-align: center; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
+            $html .= '<td style="width: 15%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
         } else {
-            $html .= '<td style="width: 15%; text-align: center; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
+            $html .= '<td style="width: 15%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
         }
         
-        // HARGA & SUBTOTAL
-        $html .= '<td style="width: 16%; text-align: right; padding: 0.5mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['display_price'], 0, ',', '.').'</td>';
-        $html .= '<td style="width: 17%; text-align: right; padding: 0.5mm; border-bottom: 1px dotted #ccc;">'.number_format($item['total_subtotal'], 0, ',', '.').'</td>';
+        $html .= '<td style="width: 16%; text-align: right; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['display_price'], 0, ',', '.').'</td>';
+        $html .= '<td style="width: 17%; text-align: right; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">'.number_format($item['total_subtotal'], 0, ',', '.').'</td>';
         $html .= '</tr>';
     }
     $html .= '</tbody></table>';
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-top: 1mm;">';
+    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-top: '.$baseSpacing.'mm;">';
     $html .= '<tr><td style="width: 50%; border: none;"></td>';
-    $html .= '<td style="width: 50%; border: 2px solid #000; padding: 1mm;">';
+    $html .= '<td style="width: 50%; border: 2px solid #000; padding: '.$baseSpacing.'mm;">';
     
     $html .= '<div>Subtotal: Rp '.number_format($calculatedSubtotal, 0, ',', '.').'</div>';
     
@@ -596,7 +601,7 @@ $smallFont = max(6, $smallFont);
         $html .= '<div>Potongan: Rp '.number_format($discount, 0, ',', '.').'</div>';
     }
     
-    $html .= '<div style="font-size: '.$headerFont.'px; border-top: 1px solid #000; padding-top: 1mm;">TOTAL BAYAR: Rp '.number_format($finalTotal, 0, ',', '.').'</div>';
+    $html .= '<div style="font-size: '.$headerFont.'px; border-top: 1px solid #000; padding-top: '.$baseSpacing.'mm;">TOTAL BAYAR: Rp '.number_format($finalTotal, 0, ',', '.').'</div>';
     
     if ($changeAmount > 0) {
         $html .= '<div>Kembalian: Rp '.number_format($changeAmount, 0, ',', '.').'</div>';
@@ -604,11 +609,11 @@ $smallFont = max(6, $smallFont);
     
     $html .= '</td></tr></table>';
 
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin: 2mm 0; border: 1px solid #000; padding: 1mm;">';
+    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin: '.$sectionMargin.'mm 0; border: 1px solid #000; padding: '.$baseSpacing.'mm;">';
     $html .= 'PEMBAYARAN: Transfer Bank BCA 4181380637 a/n YADI MULYADI';
     $html .= '</div>';
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: 1mm; font-size: '.$smallFont.'px; font-weight: bold;">';
+    $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: '.$baseSpacing.'mm; font-size: '.$smallFont.'px; font-weight: bold;">';
     $html .= '<tr>';
     $html .= '<td style="width: 60%; border: none;">';
     
@@ -642,6 +647,7 @@ $smallFont = max(6, $smallFont);
 
     return response($html);
 }
+
 
 
 
