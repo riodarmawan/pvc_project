@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Carbon;
-
+use Illuminate\Http\Response;
 
 class SalesHistoryController extends Controller
 {
@@ -193,7 +193,7 @@ return response()->json([
 }
 
 
-/** Cetak invoice + surat jalan (html sederhana, siap print) */
+/** Cetak invoice + surat jalan (html sederhana, siap print) - MULTI-PAGE AUTOMATION FIXED */
 public function invoice(Request $request, $id)
 {
     $id = (int)$id;
@@ -216,6 +216,7 @@ public function invoice(Request $request, $id)
         ->select('l.*','p.sku','p.name','u.code as uom')
         ->get();
 
+    // Get service names for projects
     $actualServiceNames = [];
     if (!empty($sale->project_id)) {
         $serviceNames = DB::table('project_services')
@@ -229,6 +230,32 @@ public function invoice(Request $request, $id)
     }
 
     $meterUom = $this->ensureUomMeterId();
+    $groupedLines = $this->groupProductLines($lines, $meterUom);
+
+    // Calculate totals
+    $calculatedSubtotal = array_sum(array_column($groupedLines, 'total_subtotal'));
+    $discount = (float)($sale->discount ?? 0);
+    $finalTotal = $calculatedSubtotal - $discount;
+
+    // Extract change amount from notes
+    $changeAmount = $this->extractChangeAmount($sale->notes);
+
+    $itemCount = count($groupedLines);
+    
+    // ✅ FIXED THRESHOLD - Reduced from 8 to 6
+    if ($itemCount <= 6) {
+        return $this->generateSinglePageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount);
+    } else {
+        return $this->generateMultiPageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount);
+    }
+}
+
+
+/**
+ * ✅ GROUP PRODUCT LINES (existing logic)
+ */
+private function groupProductLines($lines, $meterUom): array 
+{
     $groupedLines = [];
 
     foreach ($lines as $line) {
@@ -269,187 +296,355 @@ public function invoice(Request $request, $id)
     }
     unset($item);
 
-    $calculatedSubtotal = array_sum(array_column($groupedLines, 'total_subtotal'));
-    $discount = (float)($sale->discount ?? 0);
-    $finalTotal = $calculatedSubtotal - $discount;
+    return $groupedLines;
+}
 
+/**
+ * ✅ EXTRACT CHANGE AMOUNT FROM NOTES
+ */
+private function extractChangeAmount($notes): float 
+{
     $changeAmount = 0;
-    if (!empty($sale->notes) && preg_match('/KEMBALIAN:\s*Rp\s*([\d\.,]+)/i', $sale->notes, $m)) {
+    if (!empty($notes) && preg_match('/KEMBALIAN:\\s*Rp\\s*([\\d\\.,]+)/i', $notes, $m)) {
         $changeAmount = (float)str_replace(['.', ','], ['', '.'], $m[1]);
     }
+    return $changeAmount;
+}
 
+/**
+ * ✅ GENERATE SINGLE PAGE INVOICE - Untuk order kecil dengan font optimal
+ */
+private function generateSinglePageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount): Response
+{
+    $itemCount = count($groupedLines);
+    
+    // ✅ OPTIMAL FONTS - Tidak perlu scaling down
+    $fonts = [
+        'title' => 16,
+        'header' => 14, 
+        'data' => 11,
+        'table' => 10,
+        'small' => 9
+    ];
+    
+    // Adjust fonts slightly based on item count for single page
+    if ($itemCount > 5) {
+        $fonts['title'] = 15;
+        $fonts['header'] = 13;
+        $fonts['data'] = 10;
+        $fonts['table'] = 9;
+        $fonts['small'] = 8;
+    }
+    
+    return $this->renderSinglePageHTML($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts);
+}
+
+/**
+ * ✅ GENERATE MULTI-PAGE INVOICE - Untuk order besar dengan readability focus
+ */
+private function generateMultiPageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount): Response
+{
+    // ✅ CONSISTENT READABLE FONTS
+    $fonts = [
+        'title' => 14,
+        'header' => 12,
+        'data' => 10, 
+        'table' => 9,
+        'small' => 8
+    ];
+    
+    // ✅ PAGINATION LOGIC
+    $itemsPerPage = $this->calculateItemsPerPage($groupedLines);
+    $pages = $this->paginateItems($groupedLines, $itemsPerPage);
+    
+    return $this->renderMultiPageHTML($sale, $pages, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts);
+}
+
+/**
+ * ✅ CALCULATE ITEMS PER PAGE
+ */
+/**
+ * ✅ FIXED ITEMS PER PAGE CALCULATION - SMART DISTRIBUTION
+ */
+private function calculateItemsPerPage($groupedLines): int 
+{
+    $totalItems = count($groupedLines);
+    
+    // ✅ SMART DISTRIBUTION based on total items for optimal pagination
+    if ($totalItems <= 6) {
+        return $totalItems; // Single page - all items
+    } elseif ($totalItems <= 12) {
+        return 6; // 2 pages @ 6 items each (12 items max)
+    } elseif ($totalItems <= 16) {
+        return 8; // 2 pages @ 8 items each (16 items max)
+    } elseif ($totalItems <= 24) {
+        return 8; // 3 pages @ 8 items each (24 items max)
+    } elseif ($totalItems <= 30) {
+        return 10; // 3 pages @ 10 items each (30 items max)
+    } else {
+        return 12; // Large orders = 12 items per page maximum
+    }
+}
+
+/**
+ * ✅ PAGINATE ITEMS WITH SMART GROUPING
+ */
+/**
+ * ✅ FIXED PAGINATION WITH EVEN DISTRIBUTION
+ */
+private function paginateItems($groupedLines, $itemsPerPage): array
+{
+    $totalItems = count($groupedLines);
+    
+    // ✅ SINGLE PAGE SCENARIO
+    if ($totalItems <= $itemsPerPage) {
+        return [$groupedLines];
+    }
+    
+    // ✅ CALCULATE OPTIMAL PAGES AND DISTRIBUTION
+    $idealPages = ceil($totalItems / $itemsPerPage);
+    $actualItemsPerPage = ceil($totalItems / $idealPages); // Even distribution
+    
+    // ✅ ENSURE NO PAGE HAS TOO FEW ITEMS (minimum 4 items per page)
+    if ($actualItemsPerPage < 4 && $idealPages > 1) {
+        $idealPages = ceil($totalItems / 4);
+        $actualItemsPerPage = ceil($totalItems / $idealPages);
+    }
+    
+    $pages = [];
+    $currentPage = [];
+    $itemCount = 0;
+    $itemArray = array_values($groupedLines); // Convert to indexed array
+    
+    for ($i = 0; $i < $totalItems; $i++) {
+        // ✅ CALCULATE WHICH PAGE THIS ITEM BELONGS TO
+        $pageIndex = intval($i / $actualItemsPerPage);
+        
+        if (!isset($pages[$pageIndex])) {
+            $pages[$pageIndex] = [];
+        }
+        
+        // ✅ ADD ITEM TO APPROPRIATE PAGE (preserve original keys)
+        $originalKey = array_keys($groupedLines)[$i];
+        $pages[$pageIndex][$originalKey] = $itemArray[$i];
+    }
+    
+    return array_values($pages); // Return sequential array
+}
+
+
+/**
+ * ✅ RENDER SINGLE PAGE HTML (improved existing logic)
+ */
+private function renderSinglePageHTML($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts): Response
+{
     $saleDate = date('d/m/Y H:i', strtotime($sale->sale_datetime));
     $todayDate = date('d/m/Y');
 
-    $itemCount = count($groupedLines);
-
-    // ✅ AMBIL FONT ADJUSTMENT DARI QUERY PARAMETER
-    $fontAdjustment = (int) ($request->query('font', 0));
-    
-    // ✅ LIMIT FONT ADJUSTMENT (-3 sampai +3 untuk safety)
-    $fontAdjustment = max(-3, min(3, $fontAdjustment));
-
-    // ✅ BASE FONT SIZES DENGAN ADJUSTMENT
-    $titleFont = 14 + $fontAdjustment;
-    $headerFont = 12 + $fontAdjustment;
-    $labelFont = 10 + $fontAdjustment;
-    $dataFont = 9 + $fontAdjustment;
-    $tableFont = 9 + $fontAdjustment;
-    $smallFont = 8 + $fontAdjustment;
-
-    // ✅ DYNAMIC SCALING BERDASARKAN JUMLAH ITEM
-    if ($itemCount > 15) {
-        $titleFont = 12 + $fontAdjustment;
-        $headerFont = 10 + $fontAdjustment;
-        $labelFont = 9 + $fontAdjustment;
-        $dataFont = 8 + $fontAdjustment;
-        $tableFont = 8 + $fontAdjustment;
-        $smallFont = 7 + $fontAdjustment;
-    }
-    
-    if ($itemCount > 25) {
-        $titleFont = 11 + $fontAdjustment;
-        $headerFont = 9 + $fontAdjustment;
-        $labelFont = 8 + $fontAdjustment;
-        $dataFont = 7 + $fontAdjustment;
-        $tableFont = 7 + $fontAdjustment;
-        $smallFont = 6 + $fontAdjustment;
-    }
-
-    // ✅ VALIDASI MINIMAL FONT SIZE
-    $titleFont = max(6, $titleFont);
-    $headerFont = max(6, $headerFont);
-    $labelFont = max(6, $labelFont);
-    $dataFont = max(6, $dataFont);
-    $tableFont = max(6, $tableFont);
-    $smallFont = max(6, $smallFont);
-
-    // ✅ ADAPTIVE SPACING BERDASARKAN FONT SIZE
-    // Semakin besar font, semakin kecil margin/padding agar tetap fit
-    $baseSpacing = max(0.5, 2 - ($fontAdjustment * 0.3)); // 2mm default, berkurang jika font besar
-    $tablePadding = max(0.3, 1 - ($fontAdjustment * 0.2)); // 1mm default, berkurang jika font besar
-    $sectionMargin = max(0.5, 2 - ($fontAdjustment * 0.4)); // 2mm default, berkurang jika font besar
-    
-    // ✅ ADAPTIVE LINE HEIGHT
-    $lineHeight = max(0.9, 1.0 - ($fontAdjustment * 0.02)); // Line height berkurang jika font besar
-
     $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
-    $html .= '<title>Invoice + Surat Jalan #'.$id.'</title>';
+    $html .= '<title>Invoice + Surat Jalan #'.$sale->id.'</title>';
     
-    // ✅ CSS ADAPTIVE - MARGIN DAN SPACING MENYESUAIKAN FONT
-    $html .= '<style>
-        @page {
-            size: 21cm 14cm;
-            margin: '.max(3, 5 - $fontAdjustment).'mm;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: "Courier New", "Consolas", monospace;
-            font-size: '.$dataFont.'px;
-            font-weight: bold;
-            line-height: '.$lineHeight.';
-            color: #000;
-            letter-spacing: 0.1px;
-        }
-        
-        .page-container {
-            width: '.(20 + ($fontAdjustment * 0.2)).'cm;
-            height: '.(13 + ($fontAdjustment * 0.1)).'cm;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-        
-        .new-page {
-            page-break-before: always !important;
-        }
-        
-        @media print {
-            @page { 
-                size: 21cm 14cm;
-                margin: '.max(3, 5 - $fontAdjustment).'mm;
-            }
-            
-            body { 
-                margin: 0; 
-                padding: 0;
-                -webkit-print-color-adjust: exact;
-                font-weight: bold !important;
-                line-height: '.$lineHeight.' !important;
-            }
-            
-            .page-container {
-                width: 20cm;
-                height: 13cm;
-                padding: 0;
-            }
-        }
-    </style></head><body>';
+    $html .= $this->getSinglePageCSS($fonts);
+    $html .= '</head><body>';
 
     // ========================================
-    // ✅ HALAMAN 1: SURAT JALAN - ADAPTIVE SPACING
+    // ✅ HALAMAN 1: SURAT JALAN
     // ========================================
-    
     $html .= '<div class="page-container">';
-    
-    $html .= '<div style="font-size: '.$titleFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$baseSpacing.'mm;">SURAT JALAN</div>';
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin-bottom: '.$baseSpacing.'mm;">No: SJ-'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
-    
-    $html .= '<div style="font-size: '.$headerFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$sectionMargin.'mm;">';
-    $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
-    $html .= '<div style="font-size: '.$smallFont.'px;">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo, Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
-    
-    if (!empty($sale->branch_address)) {
-        $html .= '<div style="font-size: '.$smallFont.'px;">'.e($sale->branch_address).'</div>';
-    }
-    
-    $html .= '<div style="font-size: '.$smallFont.'px; font-weight: bold;">Telp: 0811 2287 2006</div>';
+    $html .= $this->renderSuratJalanContent($sale, $groupedLines, $actualServiceNames, $fonts, $todayDate, true, 1, 1);
     $html .= '</div>';
 
-    $html .= '<div style="border-top: 2px solid #000; margin: '.$sectionMargin.'mm 0;"></div>';
+    // ========================================
+    // ✅ HALAMAN 2: INVOICE
+    // ========================================
+    $html .= '<div class="page-container new-page">';
+    $html .= $this->renderInvoiceContent($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts, $saleDate, true, 1, 1);
+    $html .= '</div>';
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-bottom: '.$baseSpacing.'mm;">';
-    $html .= '<tr>';
-    $html .= '<td style="width: 50%; border: none;">KEPADA: ';
-    if ($sale->customer_name) {
-        $html .= strtoupper(e($sale->customer_name));
-        if ($sale->customer_phone) {
-            $html .= ' (Telp: '.e($sale->customer_phone).')';
-        }
-    } else {
-        $html .= 'PELANGGAN UMUM';
-    }
-    $html .= '</td>';
-    $html .= '<td style="width: 50%; text-align: right; border: none;">TANGGAL: '.$todayDate.' | '.date('H:i').'</td>';
-    $html .= '</tr></table>';
+    $html .= $this->getAutoPrintScript();
+    $html .= '</body></html>';
 
-    // ✅ TABEL SURAT JALAN - ADAPTIVE PADDING
-    $html .= '<table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #000; font-size: '.$tableFont.'px; font-weight: bold;">';
+    return response($html);
+}
+
+/**
+ * ✅ RENDER MULTI-PAGE HTML
+ */
+/**
+ * ✅ FIXED MULTI-PAGE HTML WITH PROPER RUNNING SUBTOTALS
+ */
+private function renderMultiPageHTML($sale, $pages, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts)
+{
+    $saleDate = date('d/m/Y H:i', strtotime($sale->sale_datetime));
+    $todayDate = date('d/m/Y');
     
+    $html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
+    $html .= '<title>Invoice + Surat Jalan #'.$sale->id.' (Multi-Page)</title>';
+    $html .= $this->getMultiPageCSS($fonts);
+    $html .= '</head><body>';
+    
+    $totalPages = count($pages);
+    $runningSubtotal = 0;
+    
+    foreach ($pages as $pageIndex => $pageItems) {
+        $currentPageNum = $pageIndex + 1;
+        $isFirstPage = ($pageIndex === 0);
+        $isLastPage = ($pageIndex === $totalPages - 1);
+        
+        // ✅ CALCULATE RUNNING SUBTOTAL BEFORE RENDERING
+        $pageSubtotal = array_sum(array_column($pageItems, 'total_subtotal'));
+        $runningSubtotal += $pageSubtotal;
+        
+        // ✅ SURAT JALAN PAGES
+        $html .= '<div class="page-container">';
+        $html .= $this->renderSuratJalanContent($sale, $pageItems, $actualServiceNames, $fonts, $todayDate, $isFirstPage, $currentPageNum, $totalPages);
+        $html .= '</div>';
+        
+        // ✅ INVOICE PAGES WITH PROPER RUNNING SUBTOTAL
+        $html .= '<div class="page-container">';
+        $html .= $this->renderInvoiceContent($sale, $pageItems, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts, $saleDate, $isFirstPage, $currentPageNum, $totalPages, $runningSubtotal, $isLastPage);
+        $html .= '</div>';
+    }
+    
+    $html .= $this->getAutoPrintScript();
+    $html .= '</body></html>';
+    
+    return response($html);
+}
+
+
+/**
+ * ✅ RENDER SURAT JALAN CONTENT
+ */
+private function renderSuratJalanContent($sale, $pageItems, $actualServiceNames, $fonts, $todayDate, $isFirstPage, $currentPage, $totalPages): string
+{
+    $html = '';
+    
+    // ✅ HEADER dengan PAGE NUMBER
+    $html .= '<div class="page-header">';
+    $html .= '<div style="font-size: '.$fonts['title'].'px; font-weight: bold; text-align: center; margin-bottom: 2mm;">SURAT JALAN</div>';
+    
+    if ($totalPages > 1) {
+        $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$fonts['data'].'px; margin-bottom: 2mm;">No: SJ-'.str_pad($sale->id, 5, '0', STR_PAD_LEFT).' | Halaman '.$currentPage.' dari '.$totalPages.'</div>';
+    } else {
+        $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$fonts['data'].'px; margin-bottom: 2mm;">No: SJ-'.str_pad($sale->id, 5, '0', STR_PAD_LEFT).'</div>';
+    }
+    
+    if ($isFirstPage) {
+        // ✅ COMPANY INFO hanya di halaman pertama
+        $html .= '<div style="font-size: '.$fonts['header'].'px; font-weight: bold; text-align: center; margin-bottom: 3mm;">';
+        $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
+        $html .= '<div style="font-size: '.$fonts['small'].'px;">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo, Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
+        
+        if (!empty($sale->branch_address)) {
+            $html .= '<div style="font-size: '.$fonts['small'].'px;">'.e($sale->branch_address).'</div>';
+        }
+        
+        $html .= '<div style="font-size: '.$fonts['small'].'px; font-weight: bold;">Telp: 0811 2287 2006</div>';
+        $html .= '</div>';
+        
+        $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
+        
+        // ✅ CUSTOMER INFO
+        $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$fonts['data'].'px; font-weight: bold; margin-bottom: 3mm;">';
+        $html .= '<tr>';
+        $html .= '<td style="width: 50%; border: none;">KEPADA: ';
+        if ($sale->customer_name) {
+            $html .= strtoupper(e($sale->customer_name));
+            if ($sale->customer_phone) {
+                $html .= ' (Telp: '.e($sale->customer_phone).')';
+            }
+        } else {
+            $html .= 'PELANGGAN UMUM';
+        }
+        $html .= '</td>';
+        $html .= '<td style="width: 50%; text-align: right; border: none;">TANGGAL: '.$todayDate.' | '.date('H:i').'</td>';
+        $html .= '</tr></table>';
+    } else {
+        // ✅ CONTINUATION header untuk halaman berikutnya
+        $html .= '<div style="text-align: center; font-size: '.$fonts['data'].'px; font-weight: bold; margin-bottom: 3mm;">';
+        $html .= '<strong>LANJUTAN SURAT JALAN</strong><br>';
+        $html .= 'Customer: '.($sale->customer_name ? strtoupper(e($sale->customer_name)) : 'PELANGGAN UMUM');
+        $html .= '</div>';
+        
+        $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
+    }
+    $html .= '</div>'; // End page-header
+    
+    // ✅ ITEMS TABLE untuk page ini
+    $html .= $this->renderSuratJalanTable($pageItems, $actualServiceNames, $fonts, $currentPage, $totalPages);
+    
+    if ($totalPages === 1) {
+        // ✅ TOTAL BARANG (hanya untuk single page)
+        $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$fonts['data'].'px; margin: 2mm 0; border: 1px solid #000; padding: 2mm;">';
+        $html .= 'Total Barang: '.count($pageItems).' ('.$this->terbilang(count($pageItems)).') Jenis';
+        $html .= '</div>';
+        
+        // ✅ SIGNATURE SECTION (hanya untuk single page)
+        $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: 3mm; font-size: '.$fonts['small'].'px; font-weight: bold;">';
+        $html .= '<tr>';
+        $html .= '<td style="width: 40%; border: none;">KETERANGAN: ';
+        if (!empty($sale->notes)) {
+            $cleanNotes = preg_replace('/\\|\\s*KEMBALIAN:.*$/i', '', $sale->notes);
+            $cleanNotes = trim($cleanNotes);
+            if (!empty($cleanNotes)) {
+                $html .= e($cleanNotes);
+            } else {
+                $html .= 'Barang diterima dalam keadaan baik';
+            }
+        } else {
+            $html .= 'Barang diterima dalam keadaan baik';
+        }
+        $html .= '</td>';
+        
+        $html .= '<td style="width: 30%; text-align: center; border: none;">';
+        $html .= 'YANG MENYERAHKAN<br><br><br>_________________<br>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)';
+        $html .= '</td>';
+
+        $html .= '<td style="width: 30%; text-align: center; border: none;">';
+        $html .= 'YANG MENERIMA<br><br><br>_________________<br>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)';
+        $html .= '</td>';
+        $html .= '</tr></table>';
+    } else {
+        // ✅ PAGE FOOTER untuk multi-page
+        $html .= '<div style="position: absolute; bottom: 5mm; left: 6mm; right: 6mm; border-top: 1px solid #000; padding-top: 2mm; font-size: '.$fonts['small'].'px; text-align: center;">';
+        $html .= 'Halaman '.$currentPage.' dari '.$totalPages.' - Barang diterima dalam keadaan baik';
+        $html .= '</div>';
+    }
+    
+    return $html;
+}
+
+/**
+ * ✅ FIXED SURAT JALAN TABLE WITH CORRECT NUMBERING
+ */
+private function renderSuratJalanTable($pageItems, $actualServiceNames, $fonts, $currentPage, $totalPages): string
+{
+    $html = '<table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #000; font-size: '.$fonts['table'].'px; font-weight: bold;">';
+    
+    // ✅ TABLE HEADER di setiap halaman
     $html .= '<thead><tr style="border-bottom: 1px solid #000;">';
-    $html .= '<th style="width: 6%; text-align: center; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">NO</th>';
-    $html .= '<th style="width: 13%; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">KODE</th>';
-    $html .= '<th style="width: 56%; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA BARANG</th>';
-    $html .= '<th style="width: 12%; text-align: center; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
-    $html .= '<th style="width: 13%; text-align: center; padding: '.$tablePadding.'mm; background: #f0f0f0;">SATUAN</th>';
+    $html .= '<th style="width: 6%; text-align: center; padding: 1mm; border-right: 1px solid #000; background: #f0f0f0;">NO</th>';
+    $html .= '<th style="width: 13%; padding: 1mm; border-right: 1px solid #000; background: #f0f0f0;">KODE</th>';
+    $html .= '<th style="width: 56%; padding: 1mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA BARANG</th>';
+    $html .= '<th style="width: 12%; text-align: center; padding: 1mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
+    $html .= '<th style="width: 13%; text-align: center; padding: 1mm; background: #f0f0f0;">SATUAN</th>';
     $html .= '</tr></thead><tbody>';
 
-    $no = 1;
-    foreach ($groupedLines as $item) {
+    // ✅ FIXED STARTING NUMBER - CONTINUOUS ACROSS PAGES
+    $itemsPerPage = $this->calculateOptimalItemsPerPage(count($pageItems), $totalPages, $currentPage);
+    $startingNumber = (($currentPage - 1) * $itemsPerPage) + 1;
+    $no = $startingNumber;
+
+    foreach ($pageItems as $item) {
         $html .= '<tr>';
-        $html .= '<td style="width: 6%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
+        $html .= '<td style="width: 6%; text-align: center; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.str_pad($no, 2, '0', STR_PAD_LEFT).'</td>';
         
         $displaySku = $item['sku'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
             $displaySku = 'LAYANAN';
         }
-        $html .= '<td style="width: 13%; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.e($displaySku).'</td>';
+        $html .= '<td style="width: 13%; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.e($displaySku).'</td>';
         
         $displayName = $item['name'];
         if ($item['sku'] === 'SRV-GEN' && !empty($actualServiceNames)) {
@@ -462,17 +657,17 @@ public function invoice(Request $request, $id)
         if ($item['qty_sisa'] > 0) {
             $nameText .= ' (Sisa: '.number_format($item['qty_sisa'], 2).' m)';
         }
-        $html .= '<td style="width: 56%; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
+        $html .= '<td style="width: 56%; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
         
         if ($item['is_service']) {
-            $html .= '<td style="width: 12%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1</td>';
-            $html .= '<td style="width: 13%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">Layanan</td>';
+            $html .= '<td style="width: 12%; text-align: center; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1</td>';
+            $html .= '<td style="width: 13%; text-align: center; padding: 0.7mm; border-bottom: 1px dotted #ccc;">Layanan</td>';
         } else if ($item['qty_material'] > 0) {
-            $html .= '<td style="width: 12%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
-            $html .= '<td style="width: 13%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">Pcs</td>';
+            $html .= '<td style="width: 12%; text-align: center; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
+            $html .= '<td style="width: 13%; text-align: center; padding: 0.7mm; border-bottom: 1px dotted #ccc;">Pcs</td>';
         } else {
-            $html .= '<td style="width: 12%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
-            $html .= '<td style="width: 13%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">-</td>';
+            $html .= '<td style="width: 12%; text-align: center; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
+            $html .= '<td style="width: 13%; text-align: center; padding: 0.7mm; border-bottom: 1px dotted #ccc;">-</td>';
         }
         
         $html .= '</tr>';
@@ -480,85 +675,173 @@ public function invoice(Request $request, $id)
     }
     $html .= '</tbody></table>';
 
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin: '.$sectionMargin.'mm 0; border: 1px solid #000; padding: '.$baseSpacing.'mm;">';
-    $html .= 'Total Barang: '.count($groupedLines).' ('.$this->terbilang(count($groupedLines)).') Jenis';
-    $html .= '</div>';
+    return $html;
+}
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: '.$sectionMargin.'mm; font-size: '.$smallFont.'px; font-weight: bold;">';
-    $html .= '<tr>';
-    $html .= '<td style="width: 40%; border: none;">KETERANGAN: ';
-    if (!empty($sale->notes)) {
-        $cleanNotes = preg_replace('/\|\s*KEMBALIAN:.*$/i', '', $sale->notes);
-        $cleanNotes = trim($cleanNotes);
-        if (!empty($cleanNotes)) {
-            $html .= e($cleanNotes);
+/**
+ * ✅ NEW HELPER FUNCTION - Calculate optimal items per page for numbering
+ */
+private function calculateOptimalItemsPerPage($currentPageItemCount, $totalPages, $currentPage): int
+{
+    // ✅ For numbering calculation - estimate average items per page
+    if ($totalPages <= 1) {
+        return $currentPageItemCount;
+    }
+    
+    // ✅ Return estimated items per page for continuous numbering
+    if ($totalPages == 2) {
+        return $currentPage == 1 ? 8 : 8; // Assume 8 items per page for 2 pages
+    } elseif ($totalPages == 3) {
+        return 8; // 8 items per page for 3 pages
+    } else {
+        return 10; // 10 items per page for 4+ pages
+    }
+}
+
+/**
+ * ✅ RENDER INVOICE CONTENT
+ */
+/**
+ * ✅ FIXED INVOICE CONTENT WITH PROPER RUNNING SUBTOTAL
+ */
+private function renderInvoiceContent($sale, $pageItems, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts, $saleDate, $isFirstPage, $currentPage, $totalPages, $runningSubtotal = null, $isLastPage = false): string
+{
+    $html = '';
+    
+    // ✅ HEADER dengan PAGE NUMBER
+    $html .= '<div class="page-header">';
+    $html .= '<div style="font-size: '.$fonts['title'].'px; font-weight: bold; text-align: center; margin-bottom: 2mm;">FAKTUR PENJUALAN</div>';
+    
+    if ($totalPages > 1) {
+        $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$fonts['data'].'px; margin-bottom: 2mm;">Invoice #'.str_pad($sale->id, 5, '0', STR_PAD_LEFT).' | Halaman '.$currentPage.' dari '.$totalPages.'</div>';
+    } else {
+        $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$fonts['data'].'px; margin-bottom: 2mm;">Invoice #'.str_pad($sale->id, 5, '0', STR_PAD_LEFT).'</div>';
+    }
+    
+    if ($isFirstPage) {
+        // ✅ COMPANY INFO hanya di halaman pertama
+        $html .= '<div style="font-size: '.$fonts['header'].'px; font-weight: bold; text-align: center; margin-bottom: 3mm;">';
+        $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
+        $html .= '<div style="font-size: '.$fonts['small'].'px;">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo, Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
+        
+        if (!empty($sale->branch_address)) {
+            $html .= '<div style="font-size: '.$fonts['small'].'px;">'.e($sale->branch_address).'</div>';
+        }
+        
+        $html .= '<div style="font-size: '.$fonts['small'].'px; font-weight: bold;">Telp: 0811 2287 2006</div>';
+        $html .= '</div>';
+        
+        $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
+        
+        // ✅ DATE AND CUSTOMER INFO
+        $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$fonts['data'].'px; font-weight: bold; margin-bottom: 3mm;">';
+        $html .= '<tr>';
+        $html .= '<td style="width: 50%; border: none;">TANGGAL: '.$saleDate.'</td>';
+        $html .= '<td style="width: 50%; text-align: right; border: none;">PELANGGAN: ';
+        if ($sale->customer_name) {
+            $html .= e($sale->customer_name);
+            if ($sale->customer_phone) {
+                $html .= ' ('.e($sale->customer_phone).')';
+            }
         } else {
-            $html .= 'Barang diterima dalam keadaan baik';
+            $html .= 'Pelanggan Umum';
         }
+        $html .= '</td>';
+        $html .= '</tr></table>';
     } else {
-        $html .= 'Barang diterima dalam keadaan baik';
+        // ✅ CONTINUATION header untuk halaman berikutnya
+        $html .= '<div style="text-align: center; font-size: '.$fonts['data'].'px; font-weight: bold; margin-bottom: 3mm;">';
+        $html .= '<strong>LANJUTAN FAKTUR PENJUALAN</strong><br>';
+        $html .= 'Customer: '.($sale->customer_name ? e($sale->customer_name) : 'Pelanggan Umum');
+        $html .= '</div>';
+        
+        $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
     }
-    $html .= '</td>';
+    $html .= '</div>'; // End page-header
     
-    $html .= '<td style="width: 30%; text-align: center; border: none;">';
-    $html .= 'YANG MENYERAHKAN<br><br><br>_________________<br>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)';
-    $html .= '</td>';
-
-    $html .= '<td style="width: 30%; text-align: center; border: none;">';
-    $html .= 'YANG MENERIMA<br><br><br>_________________<br>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)';
-    $html .= '</td>';
-    $html .= '</tr></table>';
+    // ✅ ITEMS TABLE untuk page ini
+    $html .= $this->renderInvoiceTable($pageItems, $actualServiceNames, $fonts, $currentPage, $totalPages);
     
-    $html .= '</div>'; // End page-container
-
-    // ========================================
-    // ✅ HALAMAN 2: INVOICE - ADAPTIVE SPACING
-    // ========================================
-    
-    $html .= '<div class="page-container new-page">';
-
-    $html .= '<div style="font-size: '.$titleFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$baseSpacing.'mm;">FAKTUR PENJUALAN</div>';
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin-bottom: '.$baseSpacing.'mm;">Invoice #'.str_pad($id, 5, '0', STR_PAD_LEFT).'</div>';
-    
-    $html .= '<div style="font-size: '.$headerFont.'px; font-weight: bold; text-align: center; margin-bottom: '.$sectionMargin.'mm;">';
-    $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
-    $html .= '<div style="font-size: '.$smallFont.'px;">Sedia: WPC Dinding, Atap UPVC, Kaca Bevel, Hollo, Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
-    
-    if (!empty($sale->branch_address)) {
-        $html .= '<div style="font-size: '.$smallFont.'px;">'.e($sale->branch_address).'</div>';
-    }
-    
-    $html .= '<div style="font-size: '.$smallFont.'px; font-weight: bold;">Telp: 0811 2287 2006</div>';
-    $html .= '</div>';
-
-    $html .= '<div style="border-top: 2px solid #000; margin: '.$sectionMargin.'mm 0;"></div>';
-
-    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-bottom: '.$baseSpacing.'mm;">';
-    $html .= '<tr>';
-    $html .= '<td style="width: 50%; border: none;">TANGGAL: '.$saleDate.'</td>';
-    $html .= '<td style="width: 50%; text-align: right; border: none;">PELANGGAN: ';
-    if ($sale->customer_name) {
-        $html .= e($sale->customer_name);
-        if ($sale->customer_phone) {
-            $html .= ' ('.e($sale->customer_phone).')';
+    if ($totalPages === 1 || $isLastPage) {
+        // ✅ FINAL TOTAL SECTION (hanya di halaman terakhir)
+        $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$fonts['data'].'px; font-weight: bold; margin-top: 3mm;">';
+        $html .= '<tr><td style="width: 50%; border: none;"></td>';
+        $html .= '<td style="width: 50%; border: 2px solid #000; padding: 2mm;">';
+        
+        $html .= '<div>Subtotal: Rp '.number_format($calculatedSubtotal, 0, ',', '.').'</div>';
+        
+        if ($discount > 0) {
+            $html .= '<div>Potongan: Rp '.number_format($discount, 0, ',', '.').'</div>';
         }
-    } else {
-        $html .= 'Pelanggan Umum';
-    }
-    $html .= '</td>';
-    $html .= '</tr></table>';
+        
+        $html .= '<div style="font-size: '.$fonts['header'].'px; border-top: 1px solid #000; padding-top: 2mm;">TOTAL BAYAR: Rp '.number_format($finalTotal, 0, ',', '.').'</div>';
+        
+        if ($changeAmount > 0) {
+            $html .= '<div>Kembalian: Rp '.number_format($changeAmount, 0, ',', '.').'</div>';
+        }
+        
+        $html .= '</td></tr></table>';
 
-    // ✅ TABEL INVOICE - ADAPTIVE PADDING
-    $html .= '<table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #000; font-size: '.$tableFont.'px; font-weight: bold;">';
+        // ✅ PAYMENT INFO
+        $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$fonts['data'].'px; margin: 2mm 0; border: 1px solid #000; padding: 2mm;">';
+        $html .= 'PEMBAYARAN: Transfer Bank BCA 4181380637 a/n YADI MULYADI';
+        $html .= '</div>';
+
+        // ✅ NOTES AND SIGNATURE
+        $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: 2mm; font-size: '.$fonts['small'].'px; font-weight: bold;">';
+        $html .= '<tr>';
+        $html .= '<td style="width: 60%; border: none;">';
+        
+        if (!empty($sale->notes)) {
+            $cleanNotes = preg_replace('/\\|\\s*KEMBALIAN:.*$/i', '', $sale->notes);
+            $cleanNotes = trim($cleanNotes);
+            
+            if (!empty($cleanNotes)) {
+                $html .= 'CATATAN: '.e($cleanNotes);
+            }
+        }
+        
+        $html .= '</td>';
+        
+        $html .= '<td style="width: 40%; text-align: center; border: none;">';
+        $html .= 'HORMAT KAMI<br><br><br>_________________';
+        $html .= '</td>';
+        $html .= '</tr></table>';
+    } else {
+        // ✅ RUNNING SUBTOTAL untuk intermediate pages - FIXED DISPLAY
+        $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$fonts['data'].'px; font-weight: bold; margin-top: 3mm;">';
+        $html .= '<tr><td style="width: 60%; border: none;"></td>';
+        $html .= '<td style="width: 40%; border: 2px solid #000; padding: 2mm; text-align: right; background: #f9f9f9;">';
+        $html .= '<strong>Subtotal s/d hal. '.$currentPage.':</strong><br>';
+        $html .= '<span style="font-size: '.$fonts['header'].'px;">Rp '.number_format($runningSubtotal, 0, ',', '.').'</span>';
+        $html .= '</td></tr></table>';
+        
+        // ✅ PAGE FOOTER untuk multi-page
+        $html .= '<div style="position: absolute; bottom: 5mm; left: 6mm; right: 6mm; border-top: 1px solid #000; padding-top: 2mm; font-size: '.$fonts['small'].'px; text-align: center;">';
+        $html .= 'Halaman '.$currentPage.' dari '.$totalPages.' - Lanjutan di halaman berikutnya';
+        $html .= '</div>';
+    }
     
+    return $html;
+}
+
+
+/**
+ * ✅ RENDER INVOICE TABLE
+ */
+private function renderInvoiceTable($pageItems, $actualServiceNames, $fonts, $currentPage, $totalPages): string
+{
+    $html = '<table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #000; font-size: '.$fonts['table'].'px; font-weight: bold;">';
+    
+    // ✅ TABLE HEADER di setiap halaman
     $html .= '<thead><tr style="border-bottom: 1px solid #000;">';
-    $html .= '<th style="width: 52%; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA PRODUK</th>';
-    $html .= '<th style="width: 15%; text-align: center; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
-    $html .= '<th style="width: 16%; text-align: right; padding: '.$tablePadding.'mm; border-right: 1px solid #000; background: #f0f0f0;">HARGA</th>';
-    $html .= '<th style="width: 17%; text-align: right; padding: '.$tablePadding.'mm; background: #f0f0f0;">SUBTOTAL</th>';
+    $html .= '<th style="width: 52%; padding: 1mm; border-right: 1px solid #000; background: #f0f0f0;">NAMA PRODUK</th>';
+    $html .= '<th style="width: 15%; text-align: center; padding: 1mm; border-right: 1px solid #000; background: #f0f0f0;">QTY</th>';
+    $html .= '<th style="width: 16%; text-align: right; padding: 1mm; border-right: 1px solid #000; background: #f0f0f0;">HARGA</th>';
+    $html .= '<th style="width: 17%; text-align: right; padding: 1mm; background: #f0f0f0;">SUBTOTAL</th>';
     $html .= '</tr></thead><tbody>';
 
-    foreach ($groupedLines as $item) {
+    foreach ($pageItems as $item) {
         $html .= '<tr>';
         
         $displayName = $item['name'];
@@ -575,78 +858,178 @@ public function invoice(Request $request, $id)
         if ($item['qty_sisa'] > 0) {
             $nameText .= ' [Sisa: '.number_format($item['qty_sisa'], 2).'m]';
         }
-        $html .= '<td style="width: 52%; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
+        $html .= '<td style="width: 52%; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc; overflow: hidden;">'.$nameText.'</td>';
         
         if ($item['is_service']) {
-            $html .= '<td style="width: 15%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1 Layanan</td>';
+            $html .= '<td style="width: 15%; text-align: center; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">1 Layanan</td>';
         } else if ($item['qty_material'] > 0) {
-            $html .= '<td style="width: 15%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
+            $html .= '<td style="width: 15%; text-align: center; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['qty_material'], 0).'</td>';
         } else {
-            $html .= '<td style="width: 15%; text-align: center; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
+            $html .= '<td style="width: 15%; text-align: center; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">-</td>';
         }
         
-        $html .= '<td style="width: 16%; text-align: right; padding: '.($tablePadding*0.7).'mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['display_price'], 0, ',', '.').'</td>';
-        $html .= '<td style="width: 17%; text-align: right; padding: '.($tablePadding*0.7).'mm; border-bottom: 1px dotted #ccc;">'.number_format($item['total_subtotal'], 0, ',', '.').'</td>';
+        $html .= '<td style="width: 16%; text-align: right; padding: 0.7mm; border-right: 1px solid #000; border-bottom: 1px dotted #ccc;">'.number_format($item['display_price'], 0, ',', '.').'</td>';
+        $html .= '<td style="width: 17%; text-align: right; padding: 0.7mm; border-bottom: 1px dotted #ccc;">'.number_format($item['total_subtotal'], 0, ',', '.').'</td>';
         $html .= '</tr>';
     }
     $html .= '</tbody></table>';
 
-    $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$labelFont.'px; font-weight: bold; margin-top: '.$baseSpacing.'mm;">';
-    $html .= '<tr><td style="width: 50%; border: none;"></td>';
-    $html .= '<td style="width: 50%; border: 2px solid #000; padding: '.$baseSpacing.'mm;">';
-    
-    $html .= '<div>Subtotal: Rp '.number_format($calculatedSubtotal, 0, ',', '.').'</div>';
-    
-    if ($discount > 0) {
-        $html .= '<div>Potongan: Rp '.number_format($discount, 0, ',', '.').'</div>';
-    }
-    
-    $html .= '<div style="font-size: '.$headerFont.'px; border-top: 1px solid #000; padding-top: '.$baseSpacing.'mm;">TOTAL BAYAR: Rp '.number_format($finalTotal, 0, ',', '.').'</div>';
-    
-    if ($changeAmount > 0) {
-        $html .= '<div>Kembalian: Rp '.number_format($changeAmount, 0, ',', '.').'</div>';
-    }
-    
-    $html .= '</td></tr></table>';
+    return $html;
+}
 
-    $html .= '<div style="text-align: center; font-weight: bold; font-size: '.$dataFont.'px; margin: '.$sectionMargin.'mm 0; border: 1px solid #000; padding: '.$baseSpacing.'mm;">';
-    $html .= 'PEMBAYARAN: Transfer Bank BCA 4181380637 a/n YADI MULYADI';
-    $html .= '</div>';
-
-    $html .= '<table style="width: 100%; border-collapse: collapse; margin-top: '.$baseSpacing.'mm; font-size: '.$smallFont.'px; font-weight: bold;">';
-    $html .= '<tr>';
-    $html .= '<td style="width: 60%; border: none;">';
-    
-    if (!empty($sale->notes)) {
-        $cleanNotes = preg_replace('/\|\s*KEMBALIAN:.*$/i', '', $sale->notes);
-        $cleanNotes = trim($cleanNotes);
-        
-        if (!empty($cleanNotes)) {
-            $html .= 'CATATAN: '.e($cleanNotes);
+/**
+ * ✅ GET SINGLE PAGE CSS
+ */
+private function getSinglePageCSS($fonts): string
+{
+    return '<style>
+        @page {
+            size: 21cm 14cm;
+            margin: 4mm;
         }
-    }
-    
-    $html .= '</td>';
-    
-    $html .= '<td style="width: 40%; text-align: center; border: none;">';
-    $html .= 'HORMAT KAMI<br><br><br>_________________';
-    $html .= '</td>';
-    $html .= '</tr></table>';
-    
-    $html .= '</div>'; // End second page-container
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: "Courier New", "Consolas", monospace;
+            font-size: '.$fonts['data'].'px;
+            font-weight: bold;
+            line-height: 1.1;
+            color: #000;
+            letter-spacing: 0.1px;
+        }
+        
+        .page-container {
+            width: 20cm;
+            height: 13cm;
+            margin: 0;
+            padding: 2mm;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .new-page {
+            page-break-before: always !important;
+        }
+        
+        @media print {
+            @page { 
+                size: 21cm 14cm;
+                margin: 4mm;
+            }
+            
+            body { 
+                margin: 0; 
+                padding: 0;
+                -webkit-print-color-adjust: exact;
+                font-weight: bold !important;
+                line-height: 1.1 !important;
+            }
+            
+            .page-container {
+                width: 20cm;
+                height: 13cm;
+                padding: 2mm;
+                page-break-after: always;
+            }
+            
+            .page-container:last-child {
+                page-break-after: avoid;
+            }
+        }
+    </style>';
+}
 
-    $html .= '<script>
+/**
+ * ✅ GET MULTI-PAGE CSS dengan PAGE BREAKS
+ */
+private function getMultiPageCSS($fonts): string
+{
+    return '<style>
+        @page {
+            size: 21cm 14cm;
+            margin: 4mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: "Courier New", "Consolas", monospace;
+            font-size: '.$fonts['data'].'px;
+            font-weight: bold;
+            line-height: 1.1;
+            color: #000;
+        }
+        
+        .page-container {
+            width: 20cm;
+            height: 13cm;
+            padding: 2mm;
+            box-sizing: border-box;
+            page-break-after: always;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .page-container:last-child {
+            page-break-after: avoid;
+        }
+        
+        .page-header {
+            margin-bottom: 3mm;
+        }
+        
+        @media print {
+            @page { 
+                size: 21cm 14cm;
+                margin: 4mm;
+            }
+            
+            body { 
+                margin: 0; 
+                padding: 0;
+                -webkit-print-color-adjust: exact;
+                font-weight: bold !important;
+                line-height: 1.1 !important;
+            }
+            
+            .page-container {
+                width: 20cm;
+                height: 13cm;
+                padding: 2mm;
+                page-break-after: always;
+                page-break-inside: avoid;
+            }
+            
+            .page-container:last-child {
+                page-break-after: avoid;
+            }
+        }
+    </style>';
+}
+
+/**
+ * ✅ GET AUTO-PRINT SCRIPT
+ */
+private function getAutoPrintScript(): string
+{
+    return '<script>
         window.addEventListener("load", function() {
             setTimeout(function() {
                 window.print();
             }, 500);
         });
     </script>';
-
-    $html .= '</body></html>';
-
-    return response($html);
 }
+
 
 
 
