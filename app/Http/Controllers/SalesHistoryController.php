@@ -830,9 +830,7 @@ private function renderInvoiceContent(
     // ===== FOOTER =====
     if ($totalPages > 1 && !$isLastPage) {
         $html .= '<div class="page-footer">Halaman '.$currentPage.' dari '.$totalPages.' - Lanjutan di halaman berikutnya</div>';
-    } elseif ($totalPages == 1) {
-        $html .= '<div class="page-footer">Terima kasih</div>';
-    }
+    } 
 
     return $html;
 }
