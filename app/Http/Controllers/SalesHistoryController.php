@@ -516,7 +516,7 @@ private function renderSuratJalanContent($sale, $pageItems, $actualServiceNames,
         // CUSTOMER INFO - KEPADA DI KIRI, TANGGAL DI KANAN
         $html .= '<table style="width: 100%; border-collapse: collapse; font-size: '.$fonts['data'].'px; font-weight: bold; margin-bottom: 3mm;">';
         $html .= '<tr>';
-        $html .= '<td style="width: 50%; border: none;">KEPADA:';
+        $html .= '<td style="width: 50%; border: none;">KEPADA: ';
         
         if ($sale->customer_name) {
             $html .= '<strong>'.strtoupper(e($sale->customer_name)).'</strong><br>';
@@ -712,7 +712,7 @@ private function renderInvoiceContent($sale, $pageItems, $actualServiceNames, $c
         $html .= '<table style="width: 100%; border-collapse: collapse; font-size: ' . $fonts['data'] . 'px; font-weight: bold; margin-bottom: 3mm;">';
         $html .= '<tr>';
         // Kolom Kiri: Informasi Pelanggan
-        $html .= '<td style="width: 50%; border: none;">PELANGGAN:';
+        $html .= '<td style="width: 50%; border: none;">PELANGGAN: ';
         if ($sale->customer_name) {
             $html .= '<strong>' . e($sale->customer_name) . '</strong><br>';
             if ($sale->customer_phone) {
