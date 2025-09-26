@@ -216,14 +216,12 @@ public function invoice(Request $request, $id)
         ->select('l.*','p.sku','p.name','u.code as uom')
         ->get();
 
-    // Get service names for projects
     $actualServiceNames = [];
     if (!empty($sale->project_id)) {
         $serviceNames = DB::table('project_services')
             ->where('project_id', $sale->project_id)
             ->pluck('name')
             ->toArray();
-       
         if (count($serviceNames) > 0) {
             $actualServiceNames = $serviceNames;
         }
@@ -232,23 +230,22 @@ public function invoice(Request $request, $id)
     $meterUom = $this->ensureUomMeterId();
     $groupedLines = $this->groupProductLines($lines, $meterUom);
 
-    // Calculate totals
     $calculatedSubtotal = array_sum(array_column($groupedLines, 'total_subtotal'));
     $discount = (float)($sale->discount ?? 0);
     $finalTotal = $calculatedSubtotal - $discount;
-
-    // Extract change amount from notes
     $changeAmount = $this->extractChangeAmount($sale->notes);
-
     $itemCount = count($groupedLines);
-    
-    // ✅ FIXED THRESHOLD - Reduced from 8 to 6
+
+    // Ambil font dari query dan batasi nilai agar aman
+    $fontAdjustment = max(-3, min(20, (int) $request->query('font', 0)));
+
     if ($itemCount <= 6) {
-        return $this->generateSinglePageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount);
+        return $this->generateSinglePageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fontAdjustment);
     } else {
-        return $this->generateMultiPageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount);
+        return $this->generateMultiPageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fontAdjustment);
     }
 }
+
 
 
 /**
@@ -314,51 +311,39 @@ private function extractChangeAmount($notes): float
 /**
  * ✅ GENERATE SINGLE PAGE INVOICE - Untuk order kecil dengan font optimal
  */
-private function generateSinglePageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount): Response
+private function generateSinglePageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fontAdjustment)
 {
-    $itemCount = count($groupedLines);
-    
-    // ✅ OPTIMAL FONTS - Tidak perlu scaling down
     $fonts = [
-        'title' => 16,
-        'header' => 14, 
-        'data' => 11,
-        'table' => 10,
-        'small' => 9
+        'title'  => max(8, 16 + $fontAdjustment),
+        'header' => max(8, 14 + $fontAdjustment),
+        'data'   => max(8, 11 + $fontAdjustment),
+        'table'  => max(8, 10 + $fontAdjustment),
+        'small'  => max(7, 9 + $fontAdjustment),
     ];
-    
-    // Adjust fonts slightly based on item count for single page
-    if ($itemCount > 5) {
-        $fonts['title'] = 15;
-        $fonts['header'] = 13;
-        $fonts['data'] = 10;
-        $fonts['table'] = 9;
-        $fonts['small'] = 8;
-    }
-    
+
     return $this->renderSinglePageHTML($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts);
 }
+
 
 /**
  * ✅ GENERATE MULTI-PAGE INVOICE - Untuk order besar dengan readability focus
  */
-private function generateMultiPageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount): Response
+private function generateMultiPageInvoice($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fontAdjustment)
 {
-    // ✅ CONSISTENT READABLE FONTS
     $fonts = [
-        'title' => 14,
-        'header' => 12,
-        'data' => 10, 
-        'table' => 9,
-        'small' => 8
+        'title'  => max(8, 14 + $fontAdjustment),
+        'header' => max(8, 12 + $fontAdjustment),
+        'data'   => max(8, 10 + $fontAdjustment),
+        'table'  => max(8, 9 + $fontAdjustment),
+        'small'  => max(7, 8 + $fontAdjustment),
     ];
-    
-    // ✅ PAGINATION LOGIC
+
     $itemsPerPage = $this->calculateItemsPerPage($groupedLines);
     $pages = $this->paginateItems($groupedLines, $itemsPerPage);
-    
+
     return $this->renderMultiPageHTML($sale, $pages, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts);
 }
+
 
 /**
  * ✅ CALCULATE ITEMS PER PAGE
@@ -396,40 +381,26 @@ private function paginateItems($groupedLines, $itemsPerPage): array
 {
     $totalItems = count($groupedLines);
     
-    // ✅ SINGLE PAGE SCENARIO
     if ($totalItems <= $itemsPerPage) {
         return [$groupedLines];
     }
     
-    // ✅ CALCULATE OPTIMAL PAGES AND DISTRIBUTION
-    $idealPages = ceil($totalItems / $itemsPerPage);
-    $actualItemsPerPage = ceil($totalItems / $idealPages); // Even distribution
-    
-    // ✅ ENSURE NO PAGE HAS TOO FEW ITEMS (minimum 4 items per page)
-    if ($actualItemsPerPage < 4 && $idealPages > 1) {
-        $idealPages = ceil($totalItems / 4);
-        $actualItemsPerPage = ceil($totalItems / $idealPages);
-    }
-    
     $pages = [];
     $currentPage = [];
-    $itemCount = 0;
-    $itemArray = array_values($groupedLines); // Convert to indexed array
     
-    for ($i = 0; $i < $totalItems; $i++) {
-        // ✅ CALCULATE WHICH PAGE THIS ITEM BELONGS TO
-        $pageIndex = intval($i / $actualItemsPerPage);
-        
-        if (!isset($pages[$pageIndex])) {
-            $pages[$pageIndex] = [];
+    foreach ($groupedLines as $key => $item) {
+        $currentPage[$key] = $item;
+        if (count($currentPage) == $itemsPerPage) {
+            $pages[] = $currentPage;
+            $currentPage = [];
         }
-        
-        // ✅ ADD ITEM TO APPROPRIATE PAGE (preserve original keys)
-        $originalKey = array_keys($groupedLines)[$i];
-        $pages[$pageIndex][$originalKey] = $itemArray[$i];
     }
     
-    return array_values($pages); // Return sequential array
+    if (!empty($currentPage)) {
+        $pages[] = $currentPage;
+    }
+    
+    return $pages;
 }
 
 
@@ -882,66 +853,81 @@ private function renderInvoiceTable($pageItems, $actualServiceNames, $fonts, $cu
  */
 private function getSinglePageCSS($fonts): string
 {
-    return '<style>
+    return '
+    <style>
+    @page {
+        size: 21cm 14cm;
+        margin: 4mm;
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: "Courier New", "Consolas", monospace;
+        font-size: '.$fonts['data'].'px;
+        font-weight: bold;
+        line-height: 1.1;
+        color: #000;
+    }
+
+    .page-container {
+        width: 20cm;
+        height: 13cm;
+        padding: 2mm;
+        box-sizing: border-box;
+
+        /* Perbaikan utama di sini */
+        page-break-after: auto;
+        page-break-inside: avoid;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .page-container:last-child {
+        page-break-after: avoid;
+    }
+
+    .page-header {
+        margin-bottom: 3mm;
+    }
+
+    @media print {
         @page {
             size: 21cm 14cm;
             margin: 4mm;
         }
-        
-        * {
+
+        body {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            font-weight: bold !important;
+            line-height: 1.1 !important;
+           font-size: '.$fonts['data'].'px;
+
         }
-        
-        body {
-            font-family: "Courier New", "Consolas", monospace;
-            font-size: '.$fonts['data'].'px;
-            font-weight: bold;
-            line-height: 1.1;
-            color: #000;
-            letter-spacing: 0.1px;
-        }
-        
+
         .page-container {
             width: 20cm;
             height: 13cm;
-            margin: 0;
             padding: 2mm;
-            overflow: hidden;
-            position: relative;
+
+            page-break-after: auto;
+            page-break-inside: avoid;
         }
-        
-        .new-page {
-            page-break-before: always !important;
+
+        .page-container:last-child {
+            page-break-after: avoid;
         }
-        
-        @media print {
-            @page { 
-                size: 21cm 14cm;
-                margin: 4mm;
-            }
-            
-            body { 
-                margin: 0; 
-                padding: 0;
-                -webkit-print-color-adjust: exact;
-                font-weight: bold !important;
-                line-height: 1.1 !important;
-            }
-            
-            .page-container {
-                width: 20cm;
-                height: 13cm;
-                padding: 2mm;
-                page-break-after: always;
-            }
-            
-            .page-container:last-child {
-                page-break-after: avoid;
-            }
-        }
-    </style>';
+    }
+</style>
+
+    
+    ';
 }
 
 /**
@@ -950,17 +936,6 @@ private function getSinglePageCSS($fonts): string
 private function getMultiPageCSS($fonts): string
 {
     return '<style>
-        @page {
-            size: 21cm 14cm;
-            margin: 4mm;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
             font-family: "Courier New", "Consolas", monospace;
             font-size: '.$fonts['data'].'px;
@@ -968,7 +943,6 @@ private function getMultiPageCSS($fonts): string
             line-height: 1.1;
             color: #000;
         }
-        
         .page-container {
             width: 20cm;
             height: 13cm;
@@ -978,43 +952,19 @@ private function getMultiPageCSS($fonts): string
             overflow: hidden;
             position: relative;
         }
-        
         .page-container:last-child {
             page-break-after: avoid;
         }
-        
-        .page-header {
-            margin-bottom: 3mm;
-        }
-        
+        .page-header { margin-bottom: 3mm; }
         @media print {
-            @page { 
-                size: 21cm 14cm;
-                margin: 4mm;
-            }
-            
-            body { 
-                margin: 0; 
-                padding: 0;
-                -webkit-print-color-adjust: exact;
-                font-weight: bold !important;
-                line-height: 1.1 !important;
-            }
-            
-            .page-container {
-                width: 20cm;
-                height: 13cm;
-                padding: 2mm;
-                page-break-after: always;
-                page-break-inside: avoid;
-            }
-            
-            .page-container:last-child {
-                page-break-after: avoid;
-            }
+            @page { size: 21cm 14cm; margin: 4mm; }
+            body { font-size: '.$fonts['data'].'px; font-weight: bold !important; line-height: 1.1 !important; }
+            .page-container { width: 20cm; height: 13cm; padding: 2mm; page-break-after: always; page-break-inside: avoid; }
+            .page-container:last-child { page-break-after: avoid; }
         }
     </style>';
 }
+
 
 /**
  * ✅ GET AUTO-PRINT SCRIPT
