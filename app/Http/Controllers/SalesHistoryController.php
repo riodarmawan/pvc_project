@@ -917,7 +917,8 @@ private function getSinglePageCSS($fonts): string
 {
     return '
     <style>
-      @page { size: 21cm 14cm; margin: 4mm; }
+      /* --- Layar / default preview --- */
+      @page { size: 21cm 14cm; margin: 6mm; }
 
       * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -932,7 +933,8 @@ private function getSinglePageCSS($fonts): string
 
       .page-container {
         width: 20cm;
-        padding: 20mm;                 /* sedikit diperkecil agar ada ruang ekstra */
+        /* Preview nyaman, tapi saat print diganti di @media print */
+        padding: 10mm 6mm 6mm 6mm;
         page-break-after: always;
         break-after: page;
         overflow: visible;
@@ -940,7 +942,7 @@ private function getSinglePageCSS($fonts): string
       }
       .page-container:last-child { page-break-after: auto; break-after: auto; }
 
-      /* JANGAN beri padding bawah, agar sisa ruang bisa dipakai blok total */
+      /* JANGAN beri padding bawah besar agar blok total bisa muat */
       .page-content { padding-bottom: 0; }
 
       .page-header { margin-bottom: 2mm; }
@@ -952,29 +954,38 @@ private function getSinglePageCSS($fonts): string
       /* blok yang benar-benar tidak boleh terpotong */
       .no-break { page-break-inside: avoid; break-inside: avoid; }
 
-      /* hindari page break sebelum elemen (lebih lunak ketimbang no-break) */
+      /* hindari page break sebelum elemen */
       .avoid-break-before { page-break-before: auto; break-before: avoid; }
 
       /* cenderung tidak terbelah */
       .keep-together { page-break-inside: avoid; break-inside: avoid; }
 
+      /* --- Mode cetak: hormati top non-printable area Epson --- */
       @media print {
-        @page { size: 21cm 14cm; margin: 4mm; }
+        /* biar kita kontrol total ruang dengan padding container */
+        @page { size: 21cm 14cm; margin: 0; }
+
         body { font-weight: bold !important; line-height: 1.1 !important; font-size: ' . $fonts['data'] . 'px; }
-        .page-container { width: 20cm; padding: 1.5mm; page-break-after: always; break-after: page; }
+
+        .page-container {
+          width: 20cm;
+          /* TOP dinaikkan ke 12mm agar judul tidak terpotong di Epson DM */
+          padding: 6mm 6mm 6mm 6mm;   /* TOP RIGHT BOTTOM LEFT */
+          page-break-after: always;
+          break-after: page;
+        }
         .page-container:last-child { page-break-after: auto; break-after: auto; }
       }
     </style>';
 }
 
 
-
-
 private function getMultiPageCSS($fonts): string
 {
     return '
     <style>
-      @page { size: 21cm 14cm; margin: 4mm; }
+      /* --- Layar / default preview --- */
+      @page { size: 21cm 14cm; margin: 6mm; }
 
       body {
         font-family: "Courier New", "Consolas", monospace;
@@ -987,7 +998,8 @@ private function getMultiPageCSS($fonts): string
 
       .page-container {
         width: 20cm;
-        padding: 20mm;
+        /* Preview nyaman; saat print akan diganti */
+        padding: 10mm 6mm 10mm 6mm;
         page-break-after: always;
         break-after: page;
         overflow: visible;
@@ -996,7 +1008,7 @@ private function getMultiPageCSS($fonts): string
       .page-container:last-child { page-break-after: auto; break-after: auto; }
 
       .page-content { padding-bottom: 14mm; }
-      .page-header { margin-bottom: 3mm; }
+      .page-header  { margin-bottom: 3mm; }
       table { width: 100%; border-collapse: separate; border-spacing: 0; }
       .mb-3mm { margin-bottom: 3mm; }
 
@@ -1009,8 +1021,25 @@ private function getMultiPageCSS($fonts): string
       }
 
       .no-break { page-break-inside: avoid; break-inside: avoid; }
+
+      /* --- Mode cetak: top padding besar untuk area non-printable --- */
+      @media print {
+        @page { size: 21cm 14cm; margin: 0; }
+
+        body { font-weight: bold !important; line-height: 1.1 !important; font-size: ' . $fonts['data'] . 'px; }
+
+        .page-container {
+          width: 20cm;
+          /* TOP 12mm mencegah header kepotong di Epson */
+          padding: 6mm 6mm 8mm 6mm;   /* TOP RIGHT BOTTOM LEFT */
+          page-break-after: always;
+          break-after: page;
+        }
+        .page-container:last-child { page-break-after: auto; break-after: auto; }
+      }
     </style>';
 }
+
 
 
 
