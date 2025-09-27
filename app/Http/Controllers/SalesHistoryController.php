@@ -320,7 +320,7 @@ private function estimateItemsPerPage(array $groupedLines, array $fonts, string 
     $baseRows = 15; // aman untuk invoice & surat jalan ukuran normal
 
     // di renderer kamu pakai $fs = $fonts['table'] * 2; → scale = 2
-    $scale = 2.0;
+    $scale = 2;
 
     // ada margin header/footer yang sedikit berbeda, beri faktor koreksi kecil
     $headerFootCorrection = ($docType === 'invoice') ? 0.9 : 0.85;
@@ -754,32 +754,32 @@ private function renderInvoiceContent(
 {
     $html = '';
 
-    // ===== HEADER =====
+    /* ===== HEADER ===== */
     $html .= '<div class="page-header">';
     $html .= '<div style="font-size: '.$fonts['title'].'px; font-weight: bold; text-align: center; margin-bottom: 2mm;">FAKTUR PENJUALAN</div>';
     if ($totalPages > 1) {
         $html .= '<div style="text-align:center; font-weight:bold; font-size: '.$fonts['data'].'px; margin-bottom:2mm;">Invoice '
-              . str_pad($sale->id, 5, '0', STR_PAD_LEFT)
+              . str_pad($sale->id, 5, "0", STR_PAD_LEFT)
               . ' | Halaman '.$currentPage.' dari '.$totalPages.'</div>';
     } else {
         $html .= '<div style="text-align:center; font-weight:bold; font-size: '.$fonts['data'].'px; margin-bottom:2mm;">Invoice '
-              . str_pad($sale->id, 5, '0', STR_PAD_LEFT).'</div>';
+              . str_pad($sale->id, 5, "0", STR_PAD_LEFT).'</div>';
     }
 
     if ($isFirstPage) {
-        // Info perusahaan
-        $html .= '<div style="font-size: '.$fonts['header'].'px; font-weight: bold; text-align: center; margin-bottom: 3mm;">';
+        $html .= '<div style="font-size: '.$fonts['header'].'px; font-weight: bold; text-align: center; margin-bottom: 2mm;">';
         $html .= '<div>'.strtoupper(e($sale->branch_name ?? 'MAJALENGKA')).'</div>';
         $html .= '<div style="font-size: '.$fonts['small'].'px;">Sedia WPC Dinding, Atap UPVC, Kaca Bevel, Hollo, Wall Moulding PVC, Lantai Vinyl, Lantai SPC, dll</div>';
         if (!empty($sale->branch_address)) {
             $html .= '<div style="font-size: '.$fonts['small'].'px;">'.e($sale->branch_address).'</div>';
         }
         $html .= '<div style="font-size: '.$fonts['small'].'px; font-weight: bold;">Telp: 0811 2287 2006</div>';
-        $html .= '</div><div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
+        $html .= '</div>';
+        $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
 
-        // ====== PELANGGAN (dibesarkan ~2× dari 'data')
+        // Info pelanggan — diperbesar (~1.5×)
         $bigFS = ($fonts['data'] * 1.5);
-        $html .= '<table style="width:100%; border-collapse:collapse; font-size: '.$bigFS.'px; font-weight:bold; margin-bottom:4mm;"><tr>';
+        $html .= '<table style="width:100%; border-collapse:collapse; font-size: '.$bigFS.'px; font-weight:bold; margin-bottom:2mm;"><tr>';
         $html .= '<td style="width:50%; border:none;">PELANGGAN: ';
         if ($sale->customer_name) {
             $html .= '<strong>'.e($sale->customer_name).'</strong><br>';
@@ -788,47 +788,52 @@ private function renderInvoiceContent(
         } else {
             $html .= '<strong>Pelanggan Umum</strong>';
         }
-        $html .= '</td><td style="width:50%; text-align:right; border:none;">TANGGAL: '.$saleDate.'</td></tr></table>';
+        $html .= '</td>';
+        $html .= '<td style="width:50%; text-align:right; border:none;">TANGGAL: '.$saleDate.'</td>';
+        $html .= '</tr></table>';
     } else {
-        // Header lanjutan
-        $html .= '<div style="text-align:center; font-size: '.$fonts['data'].'px; font-weight:bold; margin-bottom:3mm;"><strong>LANJUTAN FAKTUR PENJUALAN</strong><br>';
+        $html .= '<div style="text-align:center; font-size: '.$fonts['data'].'px; font-weight:bold; margin-bottom:2mm;"><strong>LANJUTAN FAKTUR PENJUALAN</strong><br>';
         $customerInfo = $sale->customer_name ? e($sale->customer_name) : 'Pelanggan Umum';
         if ($sale->customer_address) { $customerInfo .= ' | Alamat: '.e($sale->customer_address); }
-        $html .= 'Customer: '.$customerInfo.'</div><div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
+        $html .= 'Customer: '.$customerInfo.'</div>';
+        $html .= '<div style="border-top: 2px solid #000; margin: 2mm 0;"></div>';
     }
     $html .= '</div>'; // end header
 
-    // ===== BODY =====
+    /* ===== BODY ===== */
     $html .= '<div class="page-content">';
 
-    // Tabel item (pakai per-page untuk konsistensi penomoran bila diperlukan)
+    // Tabel item
     $html .= $this->renderInvoiceTable($pageItems, $actualServiceNames, $fonts, $currentPage, $totalPages, $itemsPerPage);
 
-    // ==== HANYA DI HALAMAN TERAKHIR (atau single page) ====
     if ($totalPages == 1 || $isLastPage) {
-        $html .= '<div class="no-break">';
 
-        // Box subtotal/total
-        $html .= '<table class="mb-3mm" style="width:100%; border-collapse:collapse; font-size: '.$fonts['data'].'px; font-weight:bold; margin-top:3mm;"><tr>';
+        /* -- spacer kecil agar tidak “nempel” ke tabel -- */
+        $html .= '<div class="mt-1mm"></div>';
+
+        /* === 2A. Kotak subtotal/total — HANYA ini yang benar2 no-break === */
+        $html .= '<div class="no-break">';
+        $html .= '<table class="mb-2mm" style="width:100%; border-collapse:collapse; font-size: '.$fonts['data'].'px; font-weight:bold;"><tr>';
         $html .= '<td style="width:50%; border:none;"></td>';
-        $html .= '<td style="width:50%; border:2px solid #000; padding:2mm;">';
+        $html .= '<td style="width:50%; border:2px solid #000; padding:1.5mm;">'; /* padding dipadatkan */
         $html .= '<div>Subtotal: Rp '.number_format($calculatedSubtotal, 0, ",", ".").'</div>';
         if ($discount > 0) {
             $html .= '<div>Potongan: Rp '.number_format($discount, 0, ",", ".").'</div>';
         }
-        $html .= '<div style="font-size: '.$fonts['header'].'px; border-top:1px solid #000; padding-top:2mm;">TOTAL BAYAR: Rp '.number_format($finalTotal, 0, ",", ".").'</div>';
+        $html .= '<div style="font-size: '.$fonts['header'].'px; border-top:1px solid #000; padding-top:1.5mm;">TOTAL BAYAR: Rp '.number_format($finalTotal, 0, ",", ".").'</div>';
         if ($changeAmount > 0) {
             $html .= '<div>Kembalian: Rp '.number_format($changeAmount, 0, ",", ".").'</div>';
         }
         $html .= '</td></tr></table>';
+        $html .= '</div>'; // end no-break (hanya totals)
 
-        // Cara bayar
-        $html .= '<div class="mb-3mm" style="text-align:center; font-weight:bold; font-size: '.$fonts['data'].'px; border:1px solid #000; padding:2mm;">';
+        /* === 2B. Pembayaran — fleksibel; cenderung tidak terbelah === */
+        $html .= '<div class="mb-2mm avoid-break-before keep-together" style="text-align:center; font-weight:bold; font-size: '.$fonts['data'].'px; border:1px solid #000; padding:1.5mm;">';
         $html .= 'PEMBAYARAN: Transfer Bank BCA 4181380637 a/n YADI MULYADI';
         $html .= '</div>';
 
-        // Catatan + tanda tangan
-        $html .= '<table style="width:100%; border-collapse:collapse; font-size: '.$fonts['small'].'px; font-weight:bold;"><tr>';
+        /* === 2C. Catatan + tanda tangan — fleksibel === */
+        $html .= '<table class="avoid-break-before keep-together" style="width:100%; border-collapse:collapse; font-size: '.$fonts['small'].'px; font-weight:bold;"><tr>';
         $html .= '<td style="width:60%; border:none;">';
         if (!empty($sale->notes)) {
             $cleanNotes = preg_replace("/KEMBALIAN.*/i", "", $sale->notes);
@@ -839,15 +844,14 @@ private function renderInvoiceContent(
         $html .= '<td style="width:40%; text-align:center; border:none;">HORMAT KAMI<br><br><br></td>';
         $html .= '</tr></table>';
 
-        $html .= '</div>'; // end no-break
     } else {
-        // Halaman antara: tidak ada subtotal apapun
-        $html .= '<div style="height: 2mm;"></div>';
+        // halaman antara: tidak ada subtotal apapun
+        $html .= '<div class="mt-1mm"></div>';
     }
 
     $html .= '</div>'; // end page-content
 
-    // ===== FOOTER =====
+    /* ===== FOOTER ===== */
     if ($totalPages > 1 && !$isLastPage) {
         $html .= '<div class="page-footer">Halaman '.$currentPage.' dari '.$totalPages.' - Lanjutan di halaman berikutnya</div>';
     }
@@ -928,7 +932,7 @@ private function getSinglePageCSS($fonts): string
 
       .page-container {
         width: 20cm;
-        padding: 2mm;
+        padding: 1.5mm;                 /* sedikit diperkecil agar ada ruang ekstra */
         page-break-after: always;
         break-after: page;
         overflow: visible;
@@ -936,35 +940,34 @@ private function getSinglePageCSS($fonts): string
       }
       .page-container:last-child { page-break-after: auto; break-after: auto; }
 
-      /* ruang bawah konten agar footer tidak menimpa tabel */
-      .page-content { padding-bottom: 14mm; }
-      .page-header { margin-bottom: 3mm; }
+      /* JANGAN beri padding bawah, agar sisa ruang bisa dipakai blok total */
+      .page-content { padding-bottom: 0; }
+
+      .page-header { margin-bottom: 2mm; }
       table { width: 100%; border-collapse: separate; border-spacing: 0; }
-      .mb-3mm { margin-bottom: 3mm; }
 
-      /* footer non-absolute, aman dari overlap */
-      .page-footer {
-        margin-top: 4mm;
-        border-top: 1px solid #000;
-        padding-top: 2mm;
-        text-align: center;
-        font-size: ' . $fonts['small'] . 'px;
-      }
+      .mb-2mm { margin-bottom: 2mm; }
+      .mt-1mm { margin-top: 1mm; }
 
-      /* blok yang harus utuh (total & tanda tangan) */
+      /* blok yang benar-benar tidak boleh terpotong */
       .no-break { page-break-inside: avoid; break-inside: avoid; }
 
-      .new-page { page-break-before: always; break-before: page; }
+      /* hindari page break sebelum elemen (lebih lunak ketimbang no-break) */
+      .avoid-break-before { page-break-before: auto; break-before: avoid; }
+
+      /* cenderung tidak terbelah */
+      .keep-together { page-break-inside: avoid; break-inside: avoid; }
 
       @media print {
         @page { size: 21cm 14cm; margin: 4mm; }
         body { font-weight: bold !important; line-height: 1.1 !important; font-size: ' . $fonts['data'] . 'px; }
-        .page-container { width: 20cm; padding: 2mm; page-break-after: always; break-after: page; }
+        .page-container { width: 20cm; padding: 1.5mm; page-break-after: always; break-after: page; }
         .page-container:last-child { page-break-after: auto; break-after: auto; }
-        .new-page { page-break-before: always; break-before: page; }
       }
     </style>';
 }
+
+
 
 
 private function getMultiPageCSS($fonts): string
