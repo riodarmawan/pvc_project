@@ -348,6 +348,7 @@ private function generateSinglePageInvoice($sale, $groupedLines, $actualServiceN
         'data'   => max(8, 11 + $fontAdjustment),
         'table'  => max(8, 10 + $fontAdjustment),
         'small'  => max(7, 9 + $fontAdjustment),
+        'pay'    => max(10, 11 + $fontAdjustment),
     ];
 
     return $this->renderSinglePageHTML($sale, $groupedLines, $actualServiceNames, $calculatedSubtotal, $discount, $finalTotal, $changeAmount, $fonts);
@@ -362,6 +363,7 @@ private function generateMultiPageInvoice($sale, $groupedLines, $actualServiceNa
         'data'   => max(8, 10 + $fontAdjustment),
         'table'  => max(8,  9 + $fontAdjustment),
         'small'  => max(7,  8 + $fontAdjustment),
+        'pay'    => max(10, 11 + $fontAdjustment),
     ];
 
     // ⬇️ gunakan estimasi per halaman yang mempertimbangkan pembesaran 2×
@@ -828,7 +830,8 @@ private function renderInvoiceContent(
         $html .= '</div>'; // end no-break (hanya totals)
 
         /* === 2B. Pembayaran — fleksibel; cenderung tidak terbelah === */
-        $html .= '<div class="mb-2mm avoid-break-before keep-together" style="text-align:center; font-weight:bold; font-size: '.$fonts['data'].'px; border:1px solid #000; padding:1.5mm;">';
+        $html .= '<div class="mb-2mm avoid-break-before keep-together" style="text-align:center; font-weight:bold; font-size: '.$fonts['pay'].'px; border:1px solid #000; padding:1.5mm;">';
+
         $html .= 'PEMBAYARAN: Transfer Bank BCA 4181380637 a/n YADI MULYADI';
         $html .= '</div>';
 
@@ -976,6 +979,8 @@ private function getSinglePageCSS($fonts): string
         }
         .page-container:last-child { page-break-after: auto; break-after: auto; }
       }
+
+      
     </style>';
 }
 
