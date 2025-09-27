@@ -932,7 +932,7 @@ private function getSinglePageCSS($fonts): string
 
       .page-container {
         width: 20cm;
-        padding: 4mm;                 /* sedikit diperkecil agar ada ruang ekstra */
+        padding: 20mm;                 /* sedikit diperkecil agar ada ruang ekstra */
         page-break-after: always;
         break-after: page;
         overflow: visible;
@@ -987,7 +987,7 @@ private function getMultiPageCSS($fonts): string
 
       .page-container {
         width: 20cm;
-        padding: 4mm;
+        padding: 20mm;
         page-break-after: always;
         break-after: page;
         overflow: visible;
