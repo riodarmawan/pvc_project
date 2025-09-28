@@ -754,6 +754,15 @@ private function renderInvoiceContent(
     int $itemsPerPage = 10
 ): string
 {
+    // === Ukuran font untuk blok PEMBAYARAN ===
+    // Samakan dengan nama produk (table *2) & info pelanggan (data *1.5),
+    // atau gunakan $fonts['pay'] jika tersedia.
+    $payFS = max(
+        (int) round(($fonts['table'] ?? 10) * 2),
+        (int) round(($fonts['data']  ?? 11) * 1.5),
+        isset($fonts['pay']) ? (int) $fonts['pay'] : 0
+    );
+
     $html = '';
 
     /* ===== HEADER ===== */
@@ -829,11 +838,15 @@ private function renderInvoiceContent(
         $html .= '</td></tr></table>';
         $html .= '</div>'; // end no-break (hanya totals)
 
-        /* === 2B. Pembayaran — fleksibel; cenderung tidak terbelah === */
-        $html .= '<div class="mb-2mm avoid-break-before keep-together" style="text-align:center; font-weight:bold; font-size: '.$fonts['pay'].'px; border:1px solid #000; padding:1.5mm;">';
-
-        $html .= 'PEMBAYARAN: Transfer Bank BCA 4181380637 a/n YADI MULYADI';
-        $html .= '</div>';
+        /* === 2B. PEMBAYARAN — besar & super-bold, hindari pecah halaman === */
+        $html .= '<div class="mb-2mm avoid-break-before keep-together" '
+              .  'style="font-size: '.$payFS.'px; font-weight:900; '
+              .  'text-align:center; border:1px solid #000; padding:1.8mm; '
+              .  'margin-top:2mm; margin-bottom:4mm; page-break-inside:avoid;">'
+              .  '<span style="font-weight:900;">PEMBAYARAN:</span> '
+              .  'Transfer Bank BCA <span style="font-weight:900;">4181380637</span> a/n '
+              .  '<span style="font-weight:900;">YADI MULYADI</span>'
+              .  '</div>';
 
         /* === 2C. Catatan + tanda tangan — fleksibel === */
         $html .= '<table class="avoid-break-before keep-together" style="width:100%; border-collapse:collapse; font-size: '.$fonts['small'].'px; font-weight:bold;"><tr>';
@@ -870,9 +883,10 @@ private function renderInvoiceContent(
 
 
 
+
 private function renderInvoiceTable($pageItems, $actualServiceNames, $fonts, $currentPage, $totalPages): string
 {
-    $fs = $fonts['table'] * 2;      // 2× font
+    $fs = $fonts['table'] * 1.7;      // 2× font
     $padHeader = '1.5mm';           // padding sedikit lebih besar
     $padCell   = '1.2mm';
 
