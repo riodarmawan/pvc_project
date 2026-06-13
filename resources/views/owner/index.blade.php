@@ -97,4 +97,117 @@
     </div>
 </div>
 
+{{-- Charts Row --}}
+<div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+    {{-- Penjualan 7 Hari --}}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <div class="mb-4">
+            <h3 class="font-semibold text-slate-800">Penjualan 7 Hari Terakhir</h3>
+            <p class="text-sm text-slate-500">Total: Rp {{ number_format($penjualan7Hari->sum('total'), 0, ',', '.') }}</p>
+        </div>
+        <canvas id="penjualanChart" height="200"></canvas>
+    </div>
+
+    {{-- Laba Bulanan --}}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <div class="mb-4">
+            <h3 class="font-semibold text-slate-800">Laba Bersih Bulanan</h3>
+            <p class="text-sm text-slate-500">Total: Rp {{ number_format($labaBulanan->sum('total'), 0, ',', '.') }}</p>
+        </div>
+        <canvas id="labaChart" height="200"></canvas>
+    </div>
+</div>
+
+{{-- Chart.js Scripts --}}
+@push('scripts')
+<script>
+    // Penjualan 7 Hari Chart
+    const penjualanCtx = document.getElementById('penjualanChart').getContext('2d');
+    const penjualanData = @json($penjualan7Hari);
+    
+    new Chart(penjualanCtx, {
+        type: 'line',
+        data: {
+            labels: penjualanData.map(d => {
+                const date = new Date(d.tanggal);
+                return date.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+            }),
+            datasets: [{
+                label: 'Penjualan',
+                data: penjualanData.map(d => d.total),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => 'Rp ' + ctx.parsed.y.toLocaleString('id-ID')
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: value => 'Rp ' + value.toLocaleString('id-ID')
+                    }
+                }
+            }
+        }
+    });
+
+    // Laba Bulanan Chart
+    const labaCtx = document.getElementById('labaChart').getContext('2d');
+    const labaData = @json($labaBulanan);
+    
+    new Chart(labaCtx, {
+        type: 'bar',
+        data: {
+            labels: labaData.map(d => {
+                const [year, month] = d.bulan.split('-');
+                const date = new Date(year, month - 1);
+                return date.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+            }),
+            datasets: [{
+                label: 'Laba',
+                data: labaData.map(d => d.total),
+                backgroundColor: '#10b981',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => 'Rp ' + ctx.parsed.y.toLocaleString('id-ID')
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: value => 'Rp ' + value.toLocaleString('id-ID')
+                    }
+                }
+            }
+        }
+    });
+</script>
+@endpush
+
 @endsection
