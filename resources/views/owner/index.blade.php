@@ -118,6 +118,90 @@
     </div>
 </div>
 
+{{-- Bottom Row --}}
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    {{-- Proyek Terbaru --}}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <div class="mb-4 flex items-center justify-between">
+            <h3 class="font-semibold text-slate-800">Proyek Terbaru</h3>
+            <a href="{{ route('projects.index') }}" class="text-sm text-emerald-600 hover:text-emerald-700">Lihat Semua →</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                        <th class="pb-3 font-medium">Nama Proyek</th>
+                        <th class="pb-3 font-medium">Status</th>
+                        <th class="pb-3 font-medium">Cabang</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($proyekTerbaru as $proyek)
+                        <tr class="border-b border-slate-100">
+                            <td class="py-3">
+                                <p class="font-medium text-slate-800">{{ $proyek->title }}</p>
+                                <p class="text-xs text-slate-500">{{ $proyek->code }}</p>
+                            </td>
+                            <td class="py-3">
+                                @if($proyek->status === 'berlangsung')
+                                    <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                                        Berlangsung
+                                    </span>
+                                @elseif($proyek->status === 'selesai')
+                                    <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                                        Selesai
+                                    </span>
+                                @elseif($proyek->status === 'terlambat')
+                                    <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                                        Terlambat
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">
+                                        {{ ucfirst($proyek->status) }}
+                                    </span>
+                                @endif
+                            </td>
+                            <td class="py-3 text-slate-600">{{ $proyek->branch->name ?? '-' }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="3" class="py-6 text-center text-slate-500">Belum ada proyek</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{-- Aktivitas Terakhir --}}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <div class="mb-4">
+            <h3 class="font-semibold text-slate-800">Aktivitas Terakhir</h3>
+        </div>
+        <div class="space-y-3">
+            @forelse($aktivitas as $item)
+                <div class="flex items-start gap-3">
+                    @if($item->type === 'penjualan')
+                        <div class="mt-1 h-2 w-2 rounded-full bg-emerald-500"></div>
+                    @elseif($item->type === 'stok')
+                        <div class="mt-1 h-2 w-2 rounded-full bg-blue-500"></div>
+                    @elseif($item->type === 'project')
+                        <div class="mt-1 h-2 w-2 rounded-full bg-yellow-500"></div>
+                    @else
+                        <div class="mt-1 h-2 w-2 rounded-full bg-slate-400"></div>
+                    @endif
+                    <div class="flex-1">
+                        <p class="text-sm text-slate-800">{{ $item->detail }}</p>
+                        <p class="text-xs text-slate-500">{{ $item->created_at->format('H:i') }}</p>
+                    </div>
+                </div>
+            @empty
+                <p class="py-6 text-center text-sm text-slate-500">Belum ada aktivitas</p>
+            @endforelse
+        </div>
+    </div>
+</div>
+
 {{-- Chart.js Scripts --}}
 @push('scripts')
 <script>
@@ -207,6 +291,25 @@
             }
         }
     });
+</script>
+@endpush
+
+{{-- Filter Scripts --}}
+@push('scripts')
+<script>
+    document.getElementById('branchFilter').addEventListener('change', applyFilters);
+    document.getElementById('dateRangeFilter').addEventListener('change', applyFilters);
+
+    function applyFilters() {
+        const branch = document.getElementById('branchFilter').value;
+        const dateRange = document.getElementById('dateRangeFilter').value;
+        
+        const params = new URLSearchParams();
+        if (branch) params.append('branch_id', branch);
+        if (dateRange) params.append('date_range', dateRange);
+        
+        window.location.href = '{{ route("owner.home") }}?' + params.toString();
+    }
 </script>
 @endpush
 
