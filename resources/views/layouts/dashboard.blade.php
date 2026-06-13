@@ -50,7 +50,7 @@
       <!-- ### NAVIGASI BARU DIMULAI DI SINI ### -->
       <nav class="flex-1 overflow-y-auto p-4 space-y-2">
         <!-- Dashboard -->
-        <a href="/"
+        <a href="{{ route('owner.home') }}"
            class="flex items-center gap-3 px-3 py-2 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-100
                   dark:hover:border-[rgba(148,163,184,.12)] dark:hover:bg-white/5">
           <svg width="20" height="20" class="text-slate-500 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,6 +84,40 @@
                class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
                       dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
               Laporan Stok
+            </a>
+            <a href="{{ route('reports.income_statement') }}"
+               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
+                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
+              Laba Rugi
+            </a>
+          </div>
+        </div>
+
+        <!-- Akuntansi -->
+        <div>
+          <button type="button"
+            class="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-100
+                   dark:hover:bg-white/5">
+            <span class="flex items-center gap-3">
+              <svg width="20" height="20" class="text-slate-500 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+              <span class="font-medium">Akuntansi</span>
+            </span>
+            <svg width="16" height="16" class="text-slate-400 transition-transform rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+          <div class="space-y-1 mt-2 ml-2 hidden">
+            <a href="{{ route('accounting.chart') }}"
+               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
+                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
+              Chart of Accounts
+            </a>
+            <a href="{{ route('accounting.journal') }}"
+               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
+                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
+              Jurnal Harian
             </a>
           </div>
         </div>
@@ -133,59 +167,55 @@
         </a>
 
         <!-- Master Data -->
-<div>
-  <button type="button"
-    class="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-100
-           dark:hover:bg-white/5">
-    <span class="flex items-center gap-3">
-      <svg width="20" height="20" class="text-slate-500 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4"/>
-      </svg>
-      <span class="font-medium">Master Data</span>
-    </span>
-    <svg width="16" height="16" class="text-slate-400 transition-transform rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-    </svg>
-  </button>
-  
-  <div class="space-y-1 mt-2 ml-2 hidden">
-    <a href="{{ route('products.create') }}"
-       class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
-              dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
-      Buat Produk
-    </a>
-    
-    <a href="{{ route('suppliers.create') }}"
-       class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
-              dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
-      Buat Supplier
-    </a>
-        <a href="{{ route('admin.products.import.form') }}"
-       class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
-              dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
-      Import Data Produk
-    </a>
-    <!-- Buat Cabang Baru - Diperbaiki -->
-    <a href="{{ route('admin.branches.create') }}"
-       class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
-              dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
-      <span class="flex items-center gap-2">
-        <!-- SVG Icon untuk cabang/branch -->
-        <svg width="16" height="16" class="text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-        </svg>
-        <span>Buat Cabang Baru</span>
-      </span>
-    </a>
-  </div>
-</div>
-
-
-
+        <div>
+          <button type="button"
+            class="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-100
+                   dark:hover:bg-white/5">
+            <span class="flex items-center gap-3">
+              <svg width="20" height="20" class="text-slate-500 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4"/>
+              </svg>
+              <span class="font-medium">Master Data</span>
+            </span>
+            <svg width="16" height="16" class="text-slate-400 transition-transform rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+          <div class="space-y-1 mt-2 ml-2 hidden">
+            <a href="{{ route('products.create') }}"
+               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
+                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
+              Buat Produk
+            </a>
+            <a href="{{ route('suppliers.create') }}"
+               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
+                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
+              Buat Supplier
+            </a>
+            <a href="{{ route('admin.products.import.form') }}"
+               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
+                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
+              Import Data Produk
+            </a>
+            <a href="{{ route('admin.branches.create') }}"
+               class="block px-3 py-2 rounded-lg text-sm hover:bg-slate-100 border border-transparent hover:border-slate-200
+                      dark:hover:bg-white/5 dark:hover:border-[rgba(148,163,184,.12)]">
+              Buat Cabang Baru
+            </a>
+          </div>
+        </div>
       </nav>
       <!-- ### AKHIR DARI NAVIGASI BARU ### -->
 
       <div class="p-4 border-t border-slate-200 dark:border-[rgba(148,163,184,.12)]">
+        <div class="flex items-center gap-3 px-3 py-2 mb-2">
+          <img class="h-9 w-9 rounded-xl border border-slate-200 dark:border-[rgba(148,163,184,.12)]"
+               src="https://ui-avatars.com/api/?name={{ urlencode(Auth::user()->name) }}&background=dbeafe&color=1e3a8a" alt="User avatar">
+          <div>
+            <p class="text-sm font-medium">{{ Auth::user()->name }}</p>
+            <p class="text-xs text-slate-500">Owner</p>
+          </div>
+        </div>
         <form method="POST" action="{{ route('logout') }}">
           @csrf
           <a href="{{ route('logout') }}"
