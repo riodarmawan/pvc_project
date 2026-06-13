@@ -20,13 +20,11 @@ class OwnerDashboardController extends Controller
         $totalPenjualan = $this->getTotalPenjualan($branchId, $dateRange);
         $labaBersih = $this->getLabaBersih($branchId, $dateRange);
         $stokMenipis = Product::where('is_active', true)
-            ->whereHas('category', function ($q) {
-                $q->where('track_stock', true);
-            })
             ->where('id', function ($q) {
                 $q->select('product_id')
                     ->from('stock_quants')
                     ->whereColumn('stock_quants.product_id', 'products.id')
+                    ->groupBy('product_id')
                     ->havingRaw('SUM(qty) < 10');
             })
             ->count();
@@ -141,7 +139,7 @@ class OwnerDashboardController extends Controller
             });
 
         $stockMoves = StockMove::select('id', 'created_at', 'qty as detail')
-            ->latest()
+            ->orderBy('created_at', 'desc')
             ->limit(5)
             ->get()
             ->map(function ($item) {
