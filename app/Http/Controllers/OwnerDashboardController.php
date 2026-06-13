@@ -28,7 +28,7 @@ class OwnerDashboardController extends Controller
                     ->havingRaw('SUM(qty) < 10');
             })
             ->count();
-        $proyekAktif = Project::whereIn('status', ['berlangsung', 'terlambat'])->count();
+        $proyekAktif = Project::whereIn('status', ['IN_PROGRESS', 'ALLOCATED'])->count();
 
         // Chart data
         $penjualan7Hari = $this->getPenjualan7Hari($branchId);
@@ -147,7 +147,7 @@ class OwnerDashboardController extends Controller
                 return $item;
             });
 
-        $projects = Project::select('id', 'updated_at as created_at', 'title as detail')
+        $projects = Project::select('id', 'created_at', 'title as detail')
             ->latest()
             ->limit(5)
             ->get()

@@ -143,17 +143,25 @@
                                 <p class="text-xs text-slate-500">{{ $proyek->code }}</p>
                             </td>
                             <td class="py-3">
-                                @if($proyek->status === 'berlangsung')
+                                @if($proyek->status === 'IN_PROGRESS')
                                     <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
                                         Berlangsung
                                     </span>
-                                @elseif($proyek->status === 'selesai')
+                                @elseif($proyek->status === 'DONE')
                                     <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
                                         Selesai
                                     </span>
-                                @elseif($proyek->status === 'terlambat')
-                                    <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                                        Terlambat
+                                @elseif($proyek->status === 'ALLOCATED')
+                                    <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                                        Dialokasikan
+                                    </span>
+                                @elseif($proyek->status === 'WAITING_RETURN')
+                                    <span class="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
+                                        Menunggu Return
+                                    </span>
+                                @elseif($proyek->status === 'READY_TO_BILL')
+                                    <span class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
+                                        Siap Tagih
                                     </span>
                                 @else
                                     <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">
