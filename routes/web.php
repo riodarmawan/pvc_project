@@ -12,13 +12,14 @@ use App\Http\Controllers\ProductApiController;
 use App\Http\Controllers\GeminiChatController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\OwnerDashboardController;
 /* ========== Auth ========== */
 Route::get('/login',  [AuthController::class,'showLogin'])->name('login');
 Route::post('/login', [AuthController::class,'login'])->name('login.do');
 Route::post('/logout',[AuthController::class,'logout'])->name('logout')->middleware('auth');
 
 /* ========== Home per peran (role_id) ========== */
-Route::middleware(['auth','role:1'])->get('/owner', fn() => view('owner.index'))->name('owner.home');
+Route::middleware(['auth','role:1'])->get('/owner', [OwnerDashboardController::class, 'index'])->name('owner.home');
 Route::middleware(['auth','role:2'])->get('/kc',    fn() => view('kc.index'))   ->name('kc.home');
 
 
@@ -156,8 +157,26 @@ Route::get('/reports/transactions', [\App\Http\Controllers\TransactionHistoryCon
     
 
 
-
 });
+
+/* ========== AKUNTANSI (OWNER ONLY) ========== */
+Route::middleware(['auth'])->prefix('accounting')->name('accounting.')->group(function () {
+    Route::get('/chart', [\App\Http\Controllers\AccountController::class, 'index'])->name('chart');
+    Route::post('/chart', [\App\Http\Controllers\AccountController::class, 'store'])->name('chart.store');
+    Route::put('/chart/{id}', [\App\Http\Controllers\AccountController::class, 'update'])->name('chart.update');
+    Route::delete('/chart/{id}', [\App\Http\Controllers\AccountController::class, 'destroy'])->name('chart.destroy');
+
+    Route::get('/journal', [\App\Http\Controllers\JournalController::class, 'index'])->name('journal');
+    Route::get('/journal/create', [\App\Http\Controllers\JournalController::class, 'create'])->name('journal.create');
+    Route::post('/journal', [\App\Http\Controllers\JournalController::class, 'store'])->name('journal.store');
+    Route::post('/journal/{id}/post', [\App\Http\Controllers\JournalController::class, 'post'])->name('journal.post');
+});
+
+/* ========== LAPORAN KEUANGAN ========== */
+Route::middleware(['auth'])->prefix('reports')->name('reports.')->group(function () {
+    Route::get('/income-statement', [\App\Http\Controllers\FinancialReportController::class, 'incomeStatement'])->name('income_statement');
+});
+
 /* ========== Root redirect sesuai role ========== */
 Route::get('/', function () {
     if (auth()->check()) {
