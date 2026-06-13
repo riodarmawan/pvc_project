@@ -116,6 +116,9 @@ class DirectPurchaseController extends Controller
             return $poId;
         });
 
+        // === AKUNTANSI: Jurnal pembelian ===
+        \App\Services\AccountingService::journalPurchase($resultPoId, $totalAmount, $branchId);
+
         return redirect()->back()->with('success', "Pembelian (PO ID: {$resultPoId}) berhasil dicatat.");
     }
     

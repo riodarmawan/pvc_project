@@ -429,6 +429,13 @@ public function finalize(Request $request)
         return $saleId;
     });
 
+    // === AKUNTANSI: Jurnal otomatis ===
+    \App\Services\AccountingService::journalPosSale($saleId, $total, $appliedPays[0]['method'] ?? 'CASH', $customerId, $branchId);
+    $cogs = \App\Services\AccountingService::calculateCogs($cart);
+    if ($cogs > 0) {
+        \App\Services\AccountingService::journalPosCogs($saleId, $cogs, $branchId);
+    }
+
     // Bersihkan session
     session()->forget(['pos.cart','pos.payments','pos.customer_id']);
 

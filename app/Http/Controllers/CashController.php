@@ -71,6 +71,14 @@ class CashController extends Controller
             'created_at'=> now(),
         ]);
 
+        // === AKUNTANSI: Jurnal pengeluaran kas ===
+        \App\Services\AccountingService::journalExpense(
+            (float)$r->input('amount'),
+            $r->input('category'),
+            trim((string)$r->input('memo', '')),
+            $branchId
+        );
+
         $start = $r->get('start_date') ?: now()->subDays(7)->toDateString();
         $end   = $r->get('end_date')   ?: now()->toDateString();
 

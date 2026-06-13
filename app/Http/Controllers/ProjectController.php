@@ -1005,8 +1005,18 @@ DB::transaction(function () use ($sale, $v) { // $v adalah hasil validasi
     }
 });
 
+            // === AKUNTANSI: Jurnal pembayaran customer ===
+            if ($appliedAmount > 0) {
+                \App\Services\AccountingService::journalCollectPayment(
+                    $appliedAmount,
+                    $sale->customer_id,
+                    $sale->branch_id
+                );
+            }
+
             return back()->with('ok', 'Pembayaran ditambahkan.');
 }
+
 /**
  * Ambil material terpakai untuk proyek, ter-aggregate per produk + uom.
  * Sumber utama: stock_moves (ref_type=PROJECT_ISSUE, state DONE).
