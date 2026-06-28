@@ -24,7 +24,7 @@
      
      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
        {{-- HPP Input --}}
-       <div class="md:col-span-2">
+       <div>
          <label class="block text-sm font-medium text-gray-700 mb-2">
            Harga Modal (HPP) 
            <span class="text-red-500 ml-1">*</span>
@@ -34,46 +34,46 @@
            <div class="absolute inset-y-0 left-0 flex items-center pl-4">
              <span class="text-gray-500 text-sm font-medium">Rp</span>
            </div>
-           <input id="hpp" type="number" step="0.01" name="hpp" value="{{ old('hpp') }}"
+           <input id="hpp" type="number" step="1" name="hpp" value="{{ old('hpp') }}"
                   class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors bg-white text-lg font-medium"
-                  min="0" required placeholder="0.00"
-                  data-markup="{{ $markup }}">
+                  min="0" required placeholder="0">
          </div>
          
-         {{-- HPP Information Note --}}
-         <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-           <div class="flex items-start">
-             <svg class="w-4 h-4 text-yellow-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-             </svg>
-             <div class="text-xs text-yellow-700">
-               <p class="font-medium mb-1">Catatan Penyimpanan</p>
-               <p>Nilai HPP disimpan ke kolom <code class="bg-yellow-100 px-1 rounded">products.notes</code> dengan format <strong>hpp:&lt;angka&gt;</strong></p>
-             </div>
-           </div>
-         </div>
+         <div class="mt-2 text-xs text-gray-500">Harga beli dari supplier</div>
        </div>
 
-       {{-- Price Preview --}}
+       {{-- Harga Jual Input --}}
        <div>
-         <label class="block text-sm font-medium text-gray-700 mb-2">Preview Harga Jual</label>
+         <label class="block text-sm font-medium text-gray-700 mb-2">
+           Harga Jual
+           <span class="text-red-500 ml-1">*</span>
+         </label>
+         
+         <div class="relative">
+           <div class="absolute inset-y-0 left-0 flex items-center pl-4">
+             <span class="text-gray-500 text-sm font-medium">Rp</span>
+           </div>
+           <input id="selling_price" type="number" step="1" name="selling_price" value="{{ old('selling_price') }}"
+                  class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors bg-white text-lg font-medium"
+                  min="0" required placeholder="0">
+         </div>
+         
+         <div class="mt-2 text-xs text-gray-500">Harga yang dibebankan ke konsumen</div>
+       </div>
+
+       {{-- Margin Preview --}}
+       <div>
+         <label class="block text-sm font-medium text-gray-700 mb-2">Margin</label>
          
          <div class="bg-white border-2 border-dashed border-gray-300 rounded-xl p-4 text-center">
-           <div class="text-xs text-gray-500 mb-2">
-             HPP × {{ number_format($markup, 2) }} (Markup)
-           </div>
-           
-           <div class="bg-gradient-to-r from-green-100 to-emerald-100 rounded-lg p-3">
-             <div class="text-sm text-green-700 font-medium mb-1">Harga Jual Estimasi</div>
-             <div id="price-preview" class="text-2xl font-bold text-green-800">Rp 0</div>
-           </div>
-           
+           <div id="margin-preview" class="text-2xl font-bold text-green-800">Rp 0</div>
+           <div id="margin-percent" class="text-sm text-gray-500 mt-1">0%</div>
            <div class="mt-3 text-xs text-gray-500">
              <div class="flex items-center justify-center">
                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"></path>
                </svg>
-               Auto-calculate saat input HPP
+               Auto-calculate saat input harga
              </div>
            </div>
          </div>
@@ -175,20 +175,23 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
    const hppInput = document.getElementById('hpp');
-   const pricePreview = document.getElementById('price-preview');
-   const markup = parseFloat(hppInput.dataset.markup) || 1;
+   const sellingPriceInput = document.getElementById('selling_price');
+   const marginPreview = document.getElementById('margin-preview');
+   const marginPercent = document.getElementById('margin-percent');
    
-   // Update price preview when HPP changes
-   function updatePricePreview() {
+   function updateMargin() {
        const hpp = parseFloat(hppInput.value) || 0;
-       const salePrice = hpp * markup;
+       const sp = parseFloat(sellingPriceInput.value) || 0;
+       const margin = sp - hpp;
+       const pct = hpp > 0 ? ((margin / hpp) * 100) : 0;
        
-       if (salePrice > 0) {
-           pricePreview.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(salePrice);
-           pricePreview.parentElement.classList.remove('opacity-50');
+       marginPreview.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(margin);
+       marginPercent.textContent = pct.toFixed(1) + '%';
+       
+       if (margin >= 0) {
+           marginPreview.className = 'text-2xl font-bold text-green-800';
        } else {
-           pricePreview.textContent = 'Rp 0';
-           pricePreview.parentElement.classList.add('opacity-50');
+           marginPreview.className = 'text-2xl font-bold text-red-800';
        }
    }
    
@@ -201,11 +204,11 @@ document.addEventListener('DOMContentLoaded', function() {
        }
    };
    
-   // Event listeners
-   hppInput?.addEventListener('input', updatePricePreview);
-   hppInput?.addEventListener('change', updatePricePreview);
+   hppInput?.addEventListener('input', updateMargin);
+   hppInput?.addEventListener('change', updateMargin);
+   sellingPriceInput?.addEventListener('input', updateMargin);
+   sellingPriceInput?.addEventListener('change', updateMargin);
    
-   // Initial calculation
-   updatePricePreview();
+   updateMargin();
 });
 </script>

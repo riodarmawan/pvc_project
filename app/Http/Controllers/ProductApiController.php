@@ -8,10 +8,6 @@ use Illuminate\Support\Facades\Auth;
 
 class ProductApiController extends Controller
 {
-    /**
-     * Markup harga dari HPP (contoh 30%)
-     */
-    private const PRICE_MARKUP = 1;
 
     /**
      * [API] Mengembalikan SEMUA data produk dalam format JSON tanpa paginasi.
@@ -48,6 +44,8 @@ class ProductApiController extends Controller
                 'p.id', 
                 'p.name', 
                 'c.name as category_name',
+                'p.hpp',
+                'p.selling_price',
                 'p.notes'
             )
             ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
@@ -78,7 +76,7 @@ class ProductApiController extends Controller
 
         // Transformasi dilakukan pada koleksi data yang didapat
         $transformedProducts = $products->map(function ($row) {
-            $price = $this->priceFromNotes($row->notes);
+            $price = $this->resolveSellingPrice($row->selling_price, $row->hpp);
             return [
                 'name'          => $row->name,
                 'category_name' => $row->category_name,
@@ -92,15 +90,13 @@ class ProductApiController extends Controller
     }
 
     /**
-     * Helper untuk menghitung harga jual dari HPP di kolom 'notes'.
+     * Helper untuk menentukan harga jual dari selling_price (fallback ke hpp).
      */
-    private function priceFromNotes($notes): float
+    private function resolveSellingPrice($sellingPrice, $hpp): float
     {
-        $hpp = 0.0;
-        if ($notes && preg_match('/hpp\s*[:=]\s*([\d\.]+)/i', (string)$notes, $m)) {
-            $hpp = (float)$m[1];
+        if (!empty($sellingPrice) && (float) $sellingPrice > 0) {
+            return round((float) $sellingPrice, 2);
         }
-        $price = $hpp * self::PRICE_MARKUP;
-        return round($price ?: 0.0, 2);
+        return round((float) ($hpp ?? 0), 2);
     }
 }

@@ -16,6 +16,8 @@ class Product extends Model
         'name',
         'category_id',
         'uom_id',
+        'hpp',
+        'selling_price',
         'track_by_meter',
         'material',
         'series',
@@ -31,6 +33,8 @@ class Product extends Model
 
     protected $casts = [
         'uom_id' => 'integer',
+        'hpp' => 'float',
+        'selling_price' => 'float',
         'track_by_meter' => 'boolean',
         'is_active' => 'boolean',
     ];

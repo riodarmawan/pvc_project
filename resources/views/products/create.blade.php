@@ -81,17 +81,28 @@
                         </select>
                     </div>
 
-                    {{-- ===== INPUT HPP BARU DI SINI ===== --}}
-                    <div class="space-y-2">
-                        <label for="hpp" class="block text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">
-                            Harga Beli Pertama (HPP)
-                        </label>
-                        <input type="number" name="hpp" id="hpp" value="{{ old('hpp') }}" placeholder="Contoh: 100000" step="1"
-                               class="w-full bg-white border border-slate-200 rounded-xl h-11 px-3 text-sm
-                                      focus:outline-none focus:ring-2 focus:ring-brand/40
-                                      dark:bg-[#0f172a] dark:border-[rgba(148,163,184,.12)]">
+                    {{-- ===== INPUT HPP & HARGA JUAL ===== --}}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label for="hpp" class="block text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                                Harga Beli (HPP)
+                            </label>
+                            <input type="number" name="hpp" id="hpp" value="{{ old('hpp') }}" placeholder="Contoh: 55000" step="1"
+                                   class="w-full bg-white border border-slate-200 rounded-xl h-11 px-3 text-sm
+                                          focus:outline-none focus:ring-2 focus:ring-brand/40
+                                          dark:bg-[#0f172a] dark:border-[rgba(148,163,184,.12)]">
+                        </div>
+                        <div class="space-y-2">
+                            <label for="selling_price" class="block text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                                Harga Jual
+                            </label>
+                            <input type="number" name="selling_price" id="selling_price" value="{{ old('selling_price') }}" placeholder="Contoh: 75000" step="1"
+                                   class="w-full bg-white border border-slate-200 rounded-xl h-11 px-3 text-sm
+                                          focus:outline-none focus:ring-2 focus:ring-brand/40
+                                          dark:bg-[#0f172a] dark:border-[rgba(148,163,184,.12)]">
+                        </div>
                     </div>
-                    {{-- ================================= --}}
+                    {{-- ================================== --}}
                 </div>
             </div>
         </div>

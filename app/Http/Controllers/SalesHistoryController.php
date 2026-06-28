@@ -30,29 +30,10 @@ class SalesHistoryController extends Controller
         return $ids;
     }
 
-    /** LIST halaman riwayat */
-public function index(Request $r)
+    /** Build query for history data (shared by index + ajaxTable) */
+private function buildSalesQuery(array $allowed, int $branchId, Carbon $start, Carbon $end, string $q)
 {
-    $allowed = $this->allowedBranchIds();
-
-    // Cabang aktif (default = default_branch user)
-    $branchId = (int) ($r->query('branch_id') ?: (Auth::user()->default_branch_id ?? 0));
-    if (!in_array($branchId, $allowed, true)) {
-        $branchId = $allowed[0];
-    }
-
-    // Ambil tanggal dari start_date/end_date ATAU d1/d2
-    $d1 = $r->query('start_date') ?? $r->query('d1');
-    $d2 = $r->query('end_date')   ?? $r->query('d2');
-
-    // Default: bulan ini s/d hari ini
-    $start = $d1 ? Carbon::parse($d1)->startOfDay() : now()->startOfMonth();
-    $end   = $d2 ? Carbon::parse($d2)->endOfDay()   : now()->endOfDay();
-    if ($start->gt($end)) { [$start, $end] = [$end, $start]; }
-
-    $q = trim((string) $r->query('q', ''));
-
-    $sales = DB::table('pos_sales as s')
+    return DB::table('pos_sales as s')
         ->leftJoin('customers as c', 'c.id', '=', 's.customer_id')
         ->join('branches as b', 'b.id', '=', 's.branch_id')
         ->selectRaw("
@@ -73,7 +54,29 @@ public function index(Request $r)
                   ->orWhere('c.phone','like',"%{$q}%");
             });
         })
-        ->orderByDesc('s.sale_datetime')
+        ->orderByDesc('s.sale_datetime');
+}
+
+/** LIST halaman riwayat */
+public function index(Request $r)
+{
+    $allowed = $this->allowedBranchIds();
+
+    $branchId = (int) ($r->query('branch_id') ?: (Auth::user()->default_branch_id ?? 0));
+    if (!in_array($branchId, $allowed, true)) {
+        $branchId = $allowed[0];
+    }
+
+    $d1 = $r->query('start_date') ?? $r->query('d1');
+    $d2 = $r->query('end_date')   ?? $r->query('d2');
+
+    $start = $d1 ? Carbon::parse($d1)->startOfDay() : now()->startOfMonth();
+    $end   = $d2 ? Carbon::parse($d2)->endOfDay()   : now()->endOfDay();
+    if ($start->gt($end)) { [$start, $end] = [$end, $start]; }
+
+    $q = trim((string) $r->query('q', ''));
+
+    $sales = $this->buildSalesQuery($allowed, $branchId, $start, $end, $q)
         ->paginate(15)
         ->appends([
             'branch_id'  => $branchId,
@@ -82,18 +85,85 @@ public function index(Request $r)
             'q'          => $q,
         ]);
 
+    // Summary stats
+    $stats = DB::table('pos_sales as s')
+        ->selectRaw('COUNT(*) as total_txn, IFNULL(SUM(s.total),0) as total_rev')
+        ->whereIn('s.branch_id', $allowed)
+        ->where('s.branch_id', $branchId)
+        ->whereBetween('s.sale_datetime', [$start, $end])
+        ->first();
+
     $branches = DB::table('branches')
         ->whereIn('id', $allowed)
         ->orderBy('name')
         ->get();
 
     return view('kasir.history', [
-        'branches' => $branches,
-        'branchId' => $branchId,
-        'start'    => $start->toDateString(),
-        'end'      => $end->toDateString(),
-        'q'        => $q,
-        'sales'    => $sales,
+        'branches'   => $branches,
+        'branchId'   => $branchId,
+        'start'      => $start->toDateString(),
+        'end'        => $end->toDateString(),
+        'q'          => $q,
+        'sales'      => $sales,
+        'totalTxn'   => $stats->total_txn ?? 0,
+        'totalRev'   => $stats->total_rev ?? 0,
+    ]);
+}
+
+/** AJAX table reload (returns partial HTML) */
+public function ajaxTable(Request $r)
+{
+    $allowed = $this->allowedBranchIds();
+
+    $branchId = (int) ($r->query('branch_id') ?: (Auth::user()->default_branch_id ?? 0));
+    if (!in_array($branchId, $allowed, true)) {
+        $branchId = $allowed[0];
+    }
+
+    $d1 = $r->query('start_date');
+    $d2 = $r->query('end_date');
+
+    $start = $d1 ? Carbon::parse($d1)->startOfDay() : now()->startOfMonth();
+    $end   = $d2 ? Carbon::parse($d2)->endOfDay()   : now()->endOfDay();
+    if ($start->gt($end)) { [$start, $end] = [$end, $start]; }
+
+    $q = trim((string) $r->query('q', ''));
+
+    $sales = $this->buildSalesQuery($allowed, $branchId, $start, $end, $q)
+        ->paginate(15)
+        ->appends([
+            'branch_id'  => $branchId,
+            'start_date' => $start->toDateString(),
+            'end_date'   => $end->toDateString(),
+            'q'          => $q,
+        ]);
+
+    $stats = DB::table('pos_sales as s')
+        ->leftJoin('customers as c', 'c.id', '=', 's.customer_id')
+        ->selectRaw('COUNT(*) as total_txn, IFNULL(SUM(s.total),0) as total_rev')
+        ->whereIn('s.branch_id', $allowed)
+        ->where('s.branch_id', $branchId)
+        ->whereBetween('s.sale_datetime', [$start, $end])
+        ->when($q !== '', function ($qq) use ($q) {
+            $qq->where(function ($w) use ($q) {
+                if (ctype_digit($q)) {
+                    $w->orWhere('s.id', (int)$q);
+                }
+                $w->orWhere('c.name','like',"%{$q}%")
+                  ->orWhere('c.phone','like',"%{$q}%");
+            });
+        })
+        ->first();
+
+    $tableHtml = view('kasir.partials._history_table', ['sales' => $sales])->render();
+    $pagHtml   = $sales->links('vendor.pagination.tailwind')->render();
+
+    return response()->json([
+        'ok'       => true,
+        'table'    => $tableHtml,
+        'pagination' => $pagHtml,
+        'totalTxn' => $stats->total_txn ?? 0,
+        'totalRev' => (float)($stats->total_rev ?? 0),
     ]);
 }
 

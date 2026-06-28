@@ -22,3 +22,10 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Artefak dev / smoke-test (jangan dikomit)
+/.playwright-mcp
+/*.png
+*:Zone.Identifier
+/PENJUALAN*.xlsx
+/QA_CASHIER_PLAN.md

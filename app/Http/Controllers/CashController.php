@@ -61,23 +61,25 @@ class CashController extends Controller
 
         $branchId = $this->branchId();
 
-        DB::table('cash_movements')->insert([
-            'branch_id' => $branchId,
-            'user_id'   => (int) (Auth::id() ?? 0),
-            'direction' => 'OUT',
-            'category'  => $r->input('category'),
-            'amount'    => round((float)$r->input('amount'), 2),
-            'memo'      => trim((string)$r->input('memo', '')),
-            'created_at'=> now(),
-        ]);
+        DB::transaction(function () use ($r, $branchId) {
+            DB::table('cash_movements')->insert([
+                'branch_id' => $branchId,
+                'user_id'   => (int) (Auth::id() ?? 0),
+                'direction' => 'OUT',
+                'category'  => $r->input('category'),
+                'amount'    => round((float)$r->input('amount'), 2),
+                'memo'      => trim((string)$r->input('memo', '')),
+                'created_at'=> now(),
+            ]);
 
-        // === AKUNTANSI: Jurnal pengeluaran kas ===
-        \App\Services\AccountingService::journalExpense(
-            (float)$r->input('amount'),
-            $r->input('category'),
-            trim((string)$r->input('memo', '')),
-            $branchId
-        );
+            // === AKUNTANSI: Jurnal pengeluaran kas (atomik dengan mutasi kas) ===
+            \App\Services\AccountingService::journalExpense(
+                (float)$r->input('amount'),
+                $r->input('category'),
+                trim((string)$r->input('memo', '')),
+                $branchId
+            );
+        });
 
         $start = $r->get('start_date') ?: now()->subDays(7)->toDateString();
         $end   = $r->get('end_date')   ?: now()->toDateString();
@@ -103,6 +105,8 @@ class CashController extends Controller
 
         $branchId = $this->branchId();
 
+        DB::transaction(function () use ($r, $branchId) {
+
         DB::table('cash_movements')->insert([
             'branch_id' => $branchId,
             'user_id'   => (int) (Auth::id() ?? 0),
@@ -112,6 +116,151 @@ class CashController extends Controller
             'memo'      => trim((string)$r->input('memo', '')),
             'created_at'=> now(),
         ]);
+
+        // === AKUNTANSI: Jurnal penyesuaian kas (per kategori) ===
+        $direction = $r->input('direction');
+        $amount    = (float) $r->input('amount');
+        $category  = $r->input('category');
+        $memo      = trim((string)$r->input('memo', ''));
+
+        $kasId   = \App\Services\AccountingService::accountId('1100');
+        $bankId  = \App\Services\AccountingService::accountId('1110');
+        $modalId = \App\Services\AccountingService::accountId('3100');
+        $priveId = \App\Services\AccountingService::accountId('3200');
+
+        if ($direction === 'IN') {
+            switch ($category) {
+                case 'OPENING':
+                    // Saldo awal: kas masuk dari modal owner
+                    // DR Kas, CR Modal
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Saldo awal kas: {$memo}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $kasId,   'debit' => $amount, 'credit' => 0, 'memo' => 'Saldo awal'],
+                            ['account_id' => $modalId, 'debit' => 0, 'credit' => $amount, 'memo' => 'Modal owner'],
+                        ],
+                    ]);
+                    break;
+
+                case 'TARIK_BANK':
+                    // Tarik dari bank: kas naik, bank turun
+                    // DR Kas, CR Bank
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Tarik dari bank: {$memo}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $kasId,  'debit' => $amount, 'credit' => 0, 'memo' => 'Kas naik'],
+                            ['account_id' => $bankId, 'debit' => 0, 'credit' => $amount, 'memo' => 'Bank turun'],
+                        ],
+                    ]);
+                    break;
+
+                case 'SETOR_BANK':
+                    // Setor ke bank: kas turun, bank naik
+                    // DR Bank, CR Kas
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Setor ke bank: {$memo}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $bankId, 'debit' => $amount, 'credit' => 0, 'memo' => 'Bank naik'],
+                            ['account_id' => $kasId,  'debit' => 0, 'credit' => $amount, 'memo' => 'Kas turun'],
+                        ],
+                    ]);
+                    break;
+
+                default: // LAINNYA
+                    // Kas masuk lainnya: DR Kas, CR Modal
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Setor kas: {$category}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $kasId,   'debit' => $amount, 'credit' => 0, 'memo' => $memo],
+                            ['account_id' => $modalId, 'debit' => 0, 'credit' => $amount, 'memo' => $category],
+                        ],
+                    ]);
+                    break;
+            }
+        } else {
+            // direction === OUT
+            switch ($category) {
+                case 'SETOR_BANK':
+                    // Setor ke bank dari kas: kas turun, bank naik
+                    // DR Bank, CR Kas
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Setor ke bank: {$memo}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $bankId, 'debit' => $amount, 'credit' => 0, 'memo' => 'Bank naik'],
+                            ['account_id' => $kasId,  'debit' => 0, 'credit' => $amount, 'memo' => 'Kas turun'],
+                        ],
+                    ]);
+                    break;
+
+                case 'TARIK_BANK':
+                    // Tarik dari bank ke kas: kas naik, bank turun
+                    // DR Kas, CR Bank
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Tarik dari bank: {$memo}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $kasId,  'debit' => $amount, 'credit' => 0, 'memo' => 'Kas naik'],
+                            ['account_id' => $bankId, 'debit' => 0, 'credit' => $amount, 'memo' => 'Bank turun'],
+                        ],
+                    ]);
+                    break;
+
+                case 'OPENING':
+                    // Ambil saldo awal: DR Modal, CR Kas
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Penarikan saldo awal: {$memo}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $modalId, 'debit' => $amount, 'credit' => 0, 'memo' => 'Penarikan modal'],
+                            ['account_id' => $kasId,   'debit' => 0, 'credit' => $amount, 'memo' => 'Kas turun'],
+                        ],
+                    ]);
+                    break;
+
+                default: // LAINNYA
+                    // Kas keluar lainnya: DR Prive, CR Kas
+                    \App\Services\AccountingService::createEntry([
+                        'date'        => now()->format('Y-m-d'),
+                        'description' => "Penarikan kas: {$category}",
+                        'source_type' => 'CASH_ADJUST',
+                        'source_id'   => null,
+                        'branch_id'   => $branchId,
+                        'lines'       => [
+                            ['account_id' => $priveId, 'debit' => $amount, 'credit' => 0, 'memo' => $category],
+                            ['account_id' => $kasId,   'debit' => 0, 'credit' => $amount, 'memo' => $memo],
+                        ],
+                    ]);
+                    break;
+            }
+        }
+
+        });
 
         $start = $r->get('start_date') ?: now()->subDays(7)->toDateString();
         $end   = $r->get('end_date')   ?: now()->toDateString();

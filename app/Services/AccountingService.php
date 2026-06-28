@@ -50,18 +50,32 @@ class AccountingService
             throw new \Exception("Jurnal tidak seimbang: Debit={$totalDebit} != Credit={$totalCredit}");
         }
 
-        $entryId = DB::table('journal_entries')->insertGetId([
-            'entry_no'    => self::generateEntryNo(),
-            'date'        => $data['date'] ?? now()->format('Y-m-d'),
-            'description' => $data['description'],
-            'source_type' => $data['source_type'] ?? null,
-            'source_id'   => $data['source_id'] ?? null,
-            'branch_id'   => $data['branch_id'] ?? null,
-            'created_by'  => Auth::id() ?? $data['created_by'] ?? 1,
-            'is_posted'   => true,
-            'created_at'  => now(),
-            'updated_at'  => now(),
-        ]);
+        // entry_no unik; pada transaksi bersamaan dua proses bisa menghasilkan
+        // nomor sama → tabrakan constraint. Coba ulang dengan nomor baru.
+        $entryId = null;
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            try {
+                $entryId = DB::table('journal_entries')->insertGetId([
+                    'entry_no'    => self::generateEntryNo(),
+                    'date'        => $data['date'] ?? now()->format('Y-m-d'),
+                    'description' => $data['description'],
+                    'source_type' => $data['source_type'] ?? null,
+                    'source_id'   => $data['source_id'] ?? null,
+                    'branch_id'   => $data['branch_id'] ?? null,
+                    'created_by'  => Auth::id() ?? $data['created_by'] ?? 1,
+                    'is_posted'   => true,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+                break;
+            } catch (\Illuminate\Database\QueryException $e) {
+                // 1062 = duplicate entry; ulangi dengan nomor baru. Selain itu lempar.
+                $code = $e->errorInfo[1] ?? null;
+                if ($code !== 1062 || $attempt === 4) {
+                    throw $e;
+                }
+            }
+        }
 
         foreach ($data['lines'] as $line) {
             DB::table('journal_entry_lines')->insert([
@@ -77,20 +91,56 @@ class AccountingService
     }
 
     /**
-     * Jurnal otomatis saat POS Sale finalized (cash/credit)
+     * Jurnal otomatis saat POS Sale finalized (supports split payments)
      *
-     * DR: Kas (1100) atau Piutang (1200)
-     * CR: Penjualan Barang (4100)
+     * DR: Kas (1100) / Piutang (1200) — per payment method
+     * CR: Penjualan Barang (4100) — total
      */
-    public static function journalPosSale(int $saleId, float $total, string $paymentMethod, ?int $customerId, ?int $branchId): void
+    public static function journalPosSale(int $saleId, float $total, $paymentMethod, ?int $customerId, ?int $branchId, array $payments = []): void
     {
         $kasId      = self::accountId('1100');
         $piutangId  = self::accountId('1200');
         $penjualanId = self::accountId('4100');
 
-        // Cash/QR/Card → Kas, Transfer/Credit → Piutang
-        $isCredit = in_array($paymentMethod, ['TRANSFER', 'CREDIT']) && $customerId;
-        $debitAccountId = $isCredit ? $piutangId : $kasId;
+        $lines = [];
+
+        // Build DR lines from payments array (split payment support)
+        if (!empty($payments)) {
+            foreach ($payments as $p) {
+                $method = $p['method'] ?? 'CASH';
+                $amount = (float) ($p['amount'] ?? 0);
+                if ($amount <= 0) continue;
+
+                $isCredit = in_array($method, ['TRANSFER', 'CREDIT']) && $customerId;
+                $debitAccountId = $isCredit ? $piutangId : $kasId;
+
+                $lines[] = [
+                    'account_id' => $debitAccountId,
+                    'debit'      => $amount,
+                    'credit'     => 0,
+                    'memo'       => "Pembayaran {$method}",
+                ];
+            }
+        } else {
+            // Fallback: single payment method (backward compatibility)
+            $isCredit = in_array($paymentMethod, ['TRANSFER', 'CREDIT']) && $customerId;
+            $debitAccountId = $isCredit ? $piutangId : $kasId;
+
+            $lines[] = [
+                'account_id' => $debitAccountId,
+                'debit'      => $total,
+                'credit'     => 0,
+                'memo'       => 'Pembayaran dari customer',
+            ];
+        }
+
+        // CR Penjualan (total)
+        $lines[] = [
+            'account_id' => $penjualanId,
+            'debit'      => 0,
+            'credit'     => $total,
+            'memo'       => 'Penjualan barang',
+        ];
 
         self::createEntry([
             'date'        => now()->format('Y-m-d'),
@@ -98,10 +148,7 @@ class AccountingService
             'source_type' => 'POS_SALE',
             'source_id'   => $saleId,
             'branch_id'   => $branchId,
-            'lines'       => [
-                ['account_id' => $debitAccountId, 'debit' => $total, 'credit' => 0, 'memo' => 'Pembayaran dari customer'],
-                ['account_id' => $penjualanId,   'debit' => 0, 'credit' => $total, 'memo' => 'Penjualan barang'],
-            ],
+            'lines'       => $lines,
         ]);
     }
 
@@ -151,6 +198,29 @@ class AccountingService
             'lines'       => [
                 ['account_id' => $returId, 'debit' => $amount, 'credit' => 0, 'memo' => 'Retur penjualan'],
                 ['account_id' => $kasId,   'debit' => 0, 'credit' => $amount, 'memo' => 'Pengembalian kas'],
+            ],
+        ]);
+    }
+
+    /**
+     * Jurnal pembalik HPP saat retur penjualan (barang kembali ke gudang).
+     *
+     * DR: Persediaan (1300)
+     * CR: HPP (5100)
+     */
+    public static function journalReturnToInventory(int $refundId, float $totalCost, ?int $branchId): void
+    {
+        if ($totalCost <= 0) return;
+
+        self::createEntry([
+            'date'        => now()->format('Y-m-d'),
+            'description' => "Retur ke persediaan #{$refundId}",
+            'source_type' => 'POS_REFUND',
+            'source_id'   => $refundId,
+            'branch_id'   => $branchId,
+            'lines'       => [
+                ['account_id' => self::accountId('1300'), 'debit' => round($totalCost, 2), 'credit' => 0, 'memo' => 'Barang kembali ke persediaan'],
+                ['account_id' => self::accountId('5100'), 'debit' => 0, 'credit' => round($totalCost, 2), 'memo' => 'Pembalikan HPP'],
             ],
         ]);
     }
@@ -233,10 +303,13 @@ class AccountingService
      * DR: Kas (1100)
      * CR: Piutang Usaha (1200)
      */
-    public static function journalCollectPayment(float $amount, ?int $customerId, ?int $branchId): void
+    public static function journalCollectPayment(float $amount, ?int $customerId, ?int $branchId, string $method = 'CASH'): void
     {
-        $kasId     = self::accountId('1100');
-        $piutangId = self::accountId('1200');
+        if ($amount <= 0) return;
+
+        // TRANSFER masuk ke Bank, selain itu (CASH/CARD/QR) ke Kas.
+        $debitAccountId = $method === 'TRANSFER' ? self::accountId('1110') : self::accountId('1100');
+        $piutangId      = self::accountId('1200');
 
         self::createEntry([
             'date'        => now()->format('Y-m-d'),
@@ -245,9 +318,41 @@ class AccountingService
             'source_id'   => $customerId,
             'branch_id'   => $branchId,
             'lines'       => [
-                ['account_id' => $kasId,     'debit' => $amount, 'credit' => 0, 'memo' => 'Penerimaan kas'],
-                ['account_id' => $piutangId, 'debit' => 0, 'credit' => $amount, 'memo' => 'Pelunasan piutang'],
+                ['account_id' => $debitAccountId, 'debit' => $amount, 'credit' => 0, 'memo' => "Penerimaan {$method}"],
+                ['account_id' => $piutangId,      'debit' => 0, 'credit' => $amount, 'memo' => 'Pelunasan piutang'],
             ],
+        ]);
+    }
+
+    /**
+     * Jurnal akrual saat tagihan proyek diterbitkan (revenue diakui, piutang muncul).
+     *
+     * DR: Piutang Usaha (1200) sebesar total
+     * CR: Penjualan Barang (4100) sebesar nilai barang/material
+     * CR: Pendapatan Jasa (4200) sebesar nilai jasa
+     */
+    public static function journalProjectBilling(int $saleId, float $goodsRevenue, float $serviceRevenue, ?int $customerId, ?int $branchId): void
+    {
+        $total = round($goodsRevenue + $serviceRevenue, 2);
+        if ($total <= 0) return;
+
+        $lines = [
+            ['account_id' => self::accountId('1200'), 'debit' => $total, 'credit' => 0, 'memo' => 'Piutang billing proyek'],
+        ];
+        if ($goodsRevenue > 0) {
+            $lines[] = ['account_id' => self::accountId('4100'), 'debit' => 0, 'credit' => round($goodsRevenue, 2), 'memo' => 'Penjualan barang proyek'];
+        }
+        if ($serviceRevenue > 0) {
+            $lines[] = ['account_id' => self::accountId('4200'), 'debit' => 0, 'credit' => round($serviceRevenue, 2), 'memo' => 'Pendapatan jasa instalasi'];
+        }
+
+        self::createEntry([
+            'date'        => now()->format('Y-m-d'),
+            'description' => "Billing Proyek #{$saleId}",
+            'source_type' => 'PROJECT_BILLING',
+            'source_id'   => $saleId,
+            'branch_id'   => $branchId,
+            'lines'       => $lines,
         ]);
     }
 
@@ -295,10 +400,19 @@ class AccountingService
         $totalCost = 0;
         foreach ($cart as $pid => $row) {
             $product = DB::table('products')->where('id', $pid)->first();
-            if ($product && $product->notes) {
-                if (preg_match('/hpp\s*:\s*([0-9\.]+)/i', $product->notes, $matches)) {
-                    $totalCost += (float) $matches[1] * (float) ($row['qty'] ?? 0);
-                }
+            if (!$product) continue;
+            
+            $hpp = 0.0;
+            // Prioritas: kolom hpp
+            if (!empty($product->hpp) && (float) $product->hpp > 0) {
+                $hpp = (float) $product->hpp;
+            } elseif ($product->notes && preg_match('/hpp\s*:\s*([0-9\.]+)/i', $product->notes, $matches)) {
+                // Fallback: parse dari notes (legacy)
+                $hpp = (float) $matches[1];
+            }
+            
+            if ($hpp > 0) {
+                $totalCost += $hpp * (float) ($row['qty'] ?? 0);
             }
         }
         return round($totalCost, 2);

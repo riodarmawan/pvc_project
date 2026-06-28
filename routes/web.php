@@ -23,7 +23,7 @@ Route::middleware(['auth','role:1'])->get('/owner', [OwnerDashboardController::c
 Route::middleware(['auth','role:2'])->get('/kc',    fn() => view('kc.index'))   ->name('kc.home');
 
 
-Route::get('/products', [ProductApiController::class, 'getProductsByBranch']);
+Route::middleware(['auth'])->get('/products', [ProductApiController::class, 'getProductsByBranch']);
 // Rute untuk halaman view Chat (GET request)
 Route::get('/chat/{branch_id}', [GeminiChatController::class, 'showChatView'])->name('chat.view');
 
@@ -31,10 +31,13 @@ Route::get('/chat/{branch_id}', [GeminiChatController::class, 'showChatView'])->
 Route::post('/chat/{branch_id}', [GeminiChatController::class, 'handleChatMessage'])->name('chat.send');
 /* ========== POS (Kasir, role_id=3) ========== */
 Route::middleware(['auth','role:3'])->group(function () {
-    // Halaman 1: Katalog
+    // Halaman 1: Katalog (legacy)
     Route::get('/kasir',            [PosController::class,'index'])   ->name('kasir.home');
 
-    // Halaman 2: Checkout
+    // Halaman POS: Single-page (Catalog + Cart + Payment)
+    Route::get('/kasir/pos',        [PosController::class,'pos'])     ->name('kasir.pos');
+
+    // Halaman 2: Checkout (legacy)
     Route::get('/kasir/checkout',   [PosController::class,'checkout'])->name('kasir.checkout');
 
     // Cart
@@ -44,6 +47,7 @@ Route::middleware(['auth','role:3'])->group(function () {
     Route::post('/kasir/cart/clear',  [PosController::class,'cartClear']) ->name('kasir.cart.clear');
 
     // Customer
+    Route::get('/kasir/customer/search',  [PosController::class,'customerSearch'])->name('kasir.customer.search');
     Route::post('/kasir/customer/select',[PosController::class,'customerSelect'])->name('kasir.customer.select');
     Route::post('/kasir/customer/quick', [PosController::class,'customerQuick']) ->name('kasir.customer.quick');
 
@@ -55,8 +59,11 @@ Route::middleware(['auth','role:3'])->group(function () {
     Route::post('/kasir/finalize', [PosController::class,'finalize'])->name('kasir.finalize');
 
     Route::get('/kasir/history',                [SalesHistoryController::class,'index'])->name('kasir.history');
-    Route::get('/kasir/history/{id}/detail',    [SalesHistoryController::class,'detail'])->name('kasir.history.detail');
-    Route::get('/kasir/history/{id}/invoice',   [SalesHistoryController::class,'invoice'])->name('kasir.history.invoice');
+    Route::get('/kasir/history/ajax-table',     [SalesHistoryController::class,'ajaxTable'])->name('kasir.history.ajax-table');
+    Route::get('/kasir/history/{id}/detail',     [SalesHistoryController::class,'detail'])->name('kasir.history.detail');
+    Route::get('/kasir/history/{id}/invoice',    [SalesHistoryController::class,'invoice'])->name('kasir.history.invoice');
+    Route::get('/kasir/history/{id}/refund/confirm', [PosController::class,'refundConfirm'])->name('kasir.history.refund.confirm');
+    Route::post('/kasir/history/{id}/refund',    [PosController::class,'refund'])->name('kasir.history.refund');
 
     // Scan dihapus (tidak dipakai)
     Route::get('/kasir/products/new',  [ProductController::class,'create'])->name('kasir.products.new');
@@ -109,10 +116,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/projects/{project}/print-invoice',   [ProjectController::class,'printInvoiceByProject'])
         ->name('projects.print.invoice.byproject');
 
-    // (opsional) cetak invoice berbasis SALE ID langsung
-    Route::get('/sales/{sale}/print-invoice',         [ProjectController::class,'printInvoice'])
-        ->name('projects.print.invoice');
-    
         Route::get('/stock/adjust',  [\App\Http\Controllers\StockAdjustmentController::class, 'create'])->name('stock.adjust.create');
     Route::post('/stock/adjust', [\App\Http\Controllers\StockAdjustmentController::class, 'store'])->name('stock.adjust.store');
     Route::get('/stock/transfer',  [\App\Http\Controllers\StockTransferController::class, 'create'])->name('stock.transfer.create');
@@ -148,6 +151,7 @@ Route::put('/leftovers/{id}', [\App\Http\Controllers\LeftoverController::class, 
 
 Route::get('/reports/stock', [\App\Http\Controllers\StockReportController::class, 'index'])->name('reports.stock.index');
 Route::get('/reports/transactions', [\App\Http\Controllers\TransactionHistoryController::class, 'index'])->name('reports.transactions.index');
+Route::get('/reports/audit-log', [\App\Http\Controllers\AuditLogController::class, 'index'])->name('reports.audit-log');
 
 // Menampilkan halaman formulir pembuatan cabang baru
     Route::get('/branches/create', [BranchController::class, 'create'])->name('admin.branches.create');
@@ -160,7 +164,7 @@ Route::get('/reports/transactions', [\App\Http\Controllers\TransactionHistoryCon
 });
 
 /* ========== AKUNTANSI (OWNER ONLY) ========== */
-Route::middleware(['auth'])->prefix('accounting')->name('accounting.')->group(function () {
+Route::middleware(['auth','role:1'])->prefix('accounting')->name('accounting.')->group(function () {
     Route::get('/chart', [\App\Http\Controllers\AccountController::class, 'index'])->name('chart');
     Route::post('/chart', [\App\Http\Controllers\AccountController::class, 'store'])->name('chart.store');
     Route::put('/chart/{id}', [\App\Http\Controllers\AccountController::class, 'update'])->name('chart.update');
@@ -172,9 +176,10 @@ Route::middleware(['auth'])->prefix('accounting')->name('accounting.')->group(fu
     Route::post('/journal/{id}/post', [\App\Http\Controllers\JournalController::class, 'post'])->name('journal.post');
 });
 
-/* ========== LAPORAN KEUANGAN ========== */
-Route::middleware(['auth'])->prefix('reports')->name('reports.')->group(function () {
+/* ========== LAPORAN KEUANGAN (OWNER ONLY) ========== */
+Route::middleware(['auth','role:1'])->prefix('reports')->name('reports.')->group(function () {
     Route::get('/income-statement', [\App\Http\Controllers\FinancialReportController::class, 'incomeStatement'])->name('income_statement');
+    Route::get('/cash-reconciliation', [\App\Http\Controllers\FinancialReportController::class, 'cashReconciliation'])->name('cash_reconciliation');
 });
 
 /* ========== Root redirect sesuai role ========== */

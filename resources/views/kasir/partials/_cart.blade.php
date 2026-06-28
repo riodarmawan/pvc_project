@@ -1,104 +1,74 @@
 @php $cart = $cart ?? []; @endphp
 
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-  {{-- Header --}}
-  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
-    <div class="flex items-center justify-between">
-      <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-        <svg class="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"></path>
-        </svg>
-        Keranjang Belanja
-      </h3>
-      @if (count($cart))
-        <form class="js-ajax inline" method="post" action="{{ route('kasir.cart.clear') }}">
-          @csrf
-          <button class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200">
-            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-            </svg>
-            Kosongkan
-          </button>
-        </form>
-      @endif
+@if (count($cart))
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[480px]">
+      <thead class="bg-white border-b border-slate-200">
+        <tr>
+          <th class="text-left py-2.5 px-3 sm:px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Produk</th>
+          <th class="text-center py-2.5 px-3 sm:px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-28">Qty</th>
+          <th class="text-right py-2.5 px-3 sm:px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24 sm:w-28 hidden sm:table-cell">Harga</th>
+          <th class="text-right py-2.5 px-3 sm:px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-28 sm:w-32">Subtotal</th>
+          <th class="py-2.5 px-3 sm:px-4 w-10"></th>
+        </tr>
+      </thead>
+      <tbody id="cart-tbody" class="divide-y divide-slate-100">
+        @foreach ($cart as $row)
+          <tr class="hover:bg-slate-50 transition-colors" data-product-id="{{ $row['product_id'] }}">
+            <td class="py-3 px-3 sm:px-4">
+              <div class="flex items-center gap-2 sm:gap-3">
+                <div class="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 bg-slate-100 rounded-lg flex items-center justify-center">
+                  <span class="text-[10px] sm:text-xs font-bold text-slate-600">{{ strtoupper(substr($row['sku'] ?? '??', 0, 2)) }}</span>
+                </div>
+                <div class="min-w-0">
+                  <div class="font-medium text-slate-900 truncate text-xs sm:text-sm">{{ $row['name'] ?? '-' }}</div>
+                  <div class="text-[10px] sm:text-xs text-slate-400">{{ $row['sku'] ?? '' }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-3 sm:px-4">
+              <div class="flex items-center justify-center gap-0.5 sm:gap-1">
+                <button onclick="checkoutUpdateQty({{ $row['product_id'] }}, {{ $row['qty'] - 1 }})"
+                        class="h-7 w-7 rounded-md border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition text-slate-500 flex-shrink-0">
+                  <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                </button>
+                <input type="number" value="{{ $row['qty'] }}" min="0"
+                       onchange="checkoutUpdateQty({{ $row['product_id'] }}, this.value)"
+                       class="qty-input w-12 sm:w-14 h-7 text-center text-xs sm:text-sm font-semibold text-slate-900 border border-slate-200 rounded-md focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 flex-shrink-0">
+                <button onclick="checkoutUpdateQty({{ $row['product_id'] }}, {{ $row['qty'] + 1 }})"
+                        class="h-7 w-7 rounded-md border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition text-slate-500 flex-shrink-0">
+                  <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </button>
+              </div>
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right text-slate-700 tabular-nums text-xs sm:text-sm hidden sm:table-cell">
+              Rp {{ number_format($row['price'] ?? 0, 0, ',', '.') }}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right font-semibold text-slate-900 tabular-nums text-xs sm:text-sm">
+              <div class="sm:hidden text-[10px] text-slate-400 font-normal mb-0.5">Rp {{ number_format($row['price'] ?? 0, 0, ',', '.') }}/item</div>
+              Rp {{ number_format($row['subtotal'] ?? 0, 0, ',', '.') }}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-center">
+              <button onclick="checkoutRemoveItem({{ $row['product_id'] }})"
+                      class="h-7 w-7 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </td>
+          </tr>
+        @endforeach
+      </tbody>
+    </table>
+  </div>
+@else
+  <div class="flex flex-col items-center justify-center py-12 sm:py-16 text-center px-4">
+    <div class="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+      <svg class="h-6 w-6 sm:h-7 sm:w-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
     </div>
+    <p class="text-sm font-medium text-slate-500">Keranjang kosong</p>
+    <p class="text-xs text-slate-400 mt-1">Kembali ke POS untuk menambah produk</p>
+    <a href="{{ route('kasir.pos') }}" class="mt-3 inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 transition">
+      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah Produk
+    </a>
   </div>
-
-  {{-- Content --}}
-  <div class="p-6">
-    @if (count($cart))
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-gray-100">
-              <th class="text-left py-3 px-2 text-xs font-semibold text-gray-600 uppercase tracking-wider">Produk</th>
-              <th class="text-center py-3 px-2 w-24 text-xs font-semibold text-gray-600 uppercase tracking-wider">Qty</th>
-              <th class="text-right py-3 px-2 w-32 text-xs font-semibold text-gray-600 uppercase tracking-wider">Harga</th>
-              <th class="text-right py-3 px-2 w-32 text-xs font-semibold text-gray-600 uppercase tracking-wider">Subtotal</th>
-              <th class="py-3 px-2 w-28 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-50">
-            @foreach ($cart as $row)
-              <tr class="hover:bg-gray-50 transition-colors duration-200">
-                <td class="py-4 px-2">
-                  <div class="flex items-center space-x-3">
-                    <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                      <span class="text-white text-xs font-bold">{{ strtoupper(substr($row['name'] ?? '-', 0, 2)) }}</span>
-                    </div>
-                    <div>
-                      <div class="font-medium text-gray-900">{{ $row['name'] ?? '-' }}</div>
-                      <div class="text-xs text-gray-500">SKU: {{ $row['sku'] ?? '' }}</div>
-                    </div>
-                  </div>
-                </td>
-                <td class="py-4 px-2 text-center">
-                  <form class="js-ajax inline-flex items-center gap-1"
-                        method="post" action="{{ route('kasir.cart.update') }}">
-                    @csrf
-                    <input type="hidden" name="product_id" value="{{ $row['product_id'] }}">
-                    <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden">
-                      <input type="number" name="qty" min="0"
-                             value="{{ (int)($row['qty'] ?? 0) }}"
-                             class="w-16 px-2 py-1 text-center border-none focus:ring-0 text-sm">
-                      <button class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors duration-200">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                        </svg>
-                      </button>
-                    </div>
-                  </form>
-                </td>
-                <td class="py-4 px-2 text-right font-medium text-gray-900">
-                  Rp {{ number_format((float)($row['price'] ?? 0), 0, ',', '.') }}
-                </td>
-                <td class="py-4 px-2 text-right font-semibold text-green-600">
-                  Rp {{ number_format((float)($row['subtotal'] ?? 0), 0, ',', '.') }}
-                </td>
-                <td class="py-4 px-2 text-center">
-                  <form class="js-ajax inline" method="post" action="{{ route('kasir.cart.remove') }}">
-                    @csrf
-                    <input type="hidden" name="product_id" value="{{ $row['product_id'] }}">
-                    <button class="inline-flex items-center justify-center w-8 h-8 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200">
-                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
-                      </svg>
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            @endforeach
-          </tbody>
-        </table>
-      </div>
-    @else
-      <div class="text-center py-12">
-        <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
-        </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-1">Keranjang Kosong</h3>
-        <p class="text-gray-500">Tambahkan produk untuk memulai transaksi</p>
-      </div>
-    @endif
-  </div>
-</div>
+@endif

@@ -81,6 +81,16 @@ class JournalController extends Controller
 
     public function post(int $id)
     {
+        $entry = DB::table('journal_entries')->where('id', $id)->first();
+
+        if (!$entry) {
+            return back()->with('error', 'Jurnal tidak ditemukan.');
+        }
+
+        if ($entry->is_posted) {
+            return back()->with('error', 'Jurnal sudah diposting sebelumnya.');
+        }
+
         DB::table('journal_entries')
             ->where('id', $id)
             ->update(['is_posted' => true, 'updated_at' => now()]);

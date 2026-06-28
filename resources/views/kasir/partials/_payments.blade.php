@@ -1,134 +1,92 @@
 @php $payments = $payments ?? []; @endphp
 
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-  {{-- Header --}}
-  <div class="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-200">
-    <div class="flex items-center justify-between">
-      <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-        <svg class="w-5 h-5 mr-2 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"></path>
-          <path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd"></path>
-        </svg>
-        Pembayaran
-      </h3>
-      @if (count($payments))
-        <form method="post" action="{{ route('kasir.pay.clear') }}" class="js-ajax inline">
-          @csrf
-          <button class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200">
-            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
-            </svg>
-            Reset
-          </button>
-        </form>
-      @endif
+<div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      <span class="text-sm font-semibold text-slate-900">Pembayaran</span>
+    </div>
+    @if(count($payments))
+      <button onclick="checkoutClearPayments()" class="text-xs text-slate-500 hover:text-red-500 transition">Reset</button>
+    @endif
+  </div>
+</div>
+
+<div class="p-4 space-y-3">
+  {{-- Payment Method Buttons --}}
+  <div class="grid grid-cols-4 gap-1.5 sm:gap-2">
+    <button onclick="selectPayMethod('CASH')" id="paymethod-CASH"
+            class="paymethod-btn flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg border-2 border-emerald-500 bg-emerald-50 transition active:scale-95">
+      <svg class="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      <span class="text-[10px] font-semibold text-emerald-700">Tunai</span>
+    </button>
+    <button onclick="selectPayMethod('CARD')" id="paymethod-CARD"
+            class="paymethod-btn flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg border-2 border-slate-200 hover:border-slate-300 transition active:scale-95">
+      <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+      <span class="text-[10px] font-medium text-slate-500">Kartu</span>
+    </button>
+    <button onclick="selectPayMethod('QR')" id="paymethod-QR"
+            class="paymethod-btn flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg border-2 border-slate-200 hover:border-slate-300 transition active:scale-95">
+      <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+      <span class="text-[10px] font-medium text-slate-500">QRIS</span>
+    </button>
+    <button onclick="selectPayMethod('TRANSFER')" id="paymethod-TRANSFER"
+            class="paymethod-btn flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg border-2 border-slate-200 hover:border-slate-300 transition active:scale-95">
+      <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+      <span class="text-[10px] font-medium text-slate-500">Transfer</span>
+    </button>
+  </div>
+
+  {{-- Amount Input --}}
+  <div>
+    <label class="block text-xs font-medium text-slate-500 mb-1">Jumlah Bayar</label>
+    <div class="relative">
+      <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-sm font-medium">Rp</span>
+      <input type="number" id="pay-amount" step="1" min="1" required
+             class="w-full h-11 pl-9 pr-3 rounded-lg border border-slate-200 text-lg font-bold tabular-nums focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+             placeholder="0">
     </div>
   </div>
 
-  <div class="p-6 space-y-4">
-    {{-- Payment Form --}}
-    <form method="post" action="{{ route('kasir.pay.add') }}" class="js-ajax space-y-4">
-      @csrf
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Metode Pembayaran</label>
-          <select name="method" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors">
-            <option value="CASH">💵 Tunai</option>
-            <option value="CARD">💳 Kartu Debit/Kredit</option>
-            <option value="QR">📱 QR Code</option>
-            <option value="TRANSFER">🏦 Transfer Bank</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Nominal Pembayaran</label>
-          <div class="relative">
-            <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">Rp</span>
-            <input type="number" step="0.01" min="0.01" required name="amount"
-                   class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                   placeholder="0">
-          </div>
-        </div>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Referensi / No. Approval (Opsional)</label>
-        <input type="text" name="ref_no" 
-               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-               placeholder="Masukkan nomor referensi...">
-      </div>
-      <button class="w-full px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center">
-        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd"></path>
-        </svg>
-        Tambah Pembayaran
-      </button>
-    </form>
+  {{-- Quick Amount Buttons --}}
+  <div id="quick-amounts" class="grid grid-cols-3 gap-1.5 sm:gap-2">
+    <button onclick="setQuickAmount('exact')" class="h-9 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition">Uang Pas</button>
+    <button onclick="setQuickAmount('50k')" class="h-9 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition">+50.000</button>
+    <button onclick="setQuickAmount('100k')" class="h-9 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition">+100.000</button>
+  </div>
 
-    {{-- Payment List --}}
-    @if (count($payments))
-      <div class="border border-gray-200 rounded-xl overflow-hidden">
-        <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
-          <h4 class="text-sm font-medium text-gray-700">Daftar Pembayaran</h4>
+  {{-- Add Payment Button --}}
+  <button onclick="checkoutAddPayment()" id="btn-add-pay"
+          class="w-full h-11 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 active:bg-emerald-800 transition flex items-center justify-center gap-1.5">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Tambah Pembayaran
+  </button>
+
+  {{-- Payment List --}}
+  @if (count($payments))
+    <div class="space-y-1.5" id="payment-list">
+      @foreach ($payments as $i => $p)
+        <div class="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded bg-slate-200 text-slate-600 text-[10px] font-bold">{{ $i + 1 }}</span>
+            <span class="text-xs font-medium text-slate-700">
+              @switch($p['method'])
+                @case('CASH') Tunai @break
+                @case('CARD') Kartu @break
+                @case('QR') QRIS @break
+                @case('TRANSFER') Transfer @break
+                @default {{ $p['method'] }}
+              @endswitch
+            </span>
+          </div>
+          <span class="text-sm font-semibold text-slate-900 tabular-nums">Rp {{ number_format($p['amount'] ?? 0, 0, ',', '.') }}</span>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="text-left py-3 px-4 font-medium text-gray-600">#</th>
-                <th class="text-left py-3 px-4 font-medium text-gray-600">Metode</th>
-                <th class="text-right py-3 px-4 font-medium text-gray-600">Nominal</th>
-                <th class="text-left py-3 px-4 font-medium text-gray-600">Referensi</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              @foreach ($payments as $i => $p)
-                <tr class="hover:bg-gray-50 transition-colors duration-200">
-                  <td class="py-3 px-4">
-                   <span class="inline-flex items-center justify-center w-6 h-6 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-full">
-                     {{ $i + 1 }}
-                   </span>
-                 </td>
-                 <td class="py-3 px-4">
-                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                     {{ $p['method'] === 'CASH' ? 'bg-green-100 text-green-800' : '' }}
-                     {{ $p['method'] === 'CARD' ? 'bg-blue-100 text-blue-800' : '' }}
-                     {{ $p['method'] === 'QR' ? 'bg-purple-100 text-purple-800' : '' }}
-                     {{ $p['method'] === 'TRANSFER' ? 'bg-orange-100 text-orange-800' : '' }}">
-                     @switch($p['method'])
-                       @case('CASH')
-                         💵 Tunai
-                         @break
-                       @case('CARD')
-                         💳 Kartu
-                         @break
-                       @case('QR')
-                         📱 QR Code
-                         @break
-                       @case('TRANSFER')
-                         🏦 Transfer
-                         @break
-                       @default
-                         {{ $p['method'] ?? '-' }}
-                     @endswitch
-                   </span>
-                 </td>
-                 <td class="py-3 px-4 text-right font-semibold text-green-600">
-                   Rp {{ number_format((float)($p['amount'] ?? 0), 0, ',', '.') }}
-                 </td>
-                 <td class="py-3 px-4 text-gray-600">{{ $p['ref_no'] ?? '—' }}</td>
-               </tr>
-             @endforeach
-           </tbody>
-         </table>
-       </div>
-     </div>
-   @else
-     <div class="text-center py-8">
-       <svg class="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
-       </svg>
-       <h4 class="text-lg font-medium text-gray-900 mb-1">Belum Ada Pembayaran</h4>
-       <p class="text-gray-500">Tambahkan metode pembayaran untuk melanjutkan transaksi</p>
-     </div>
-   @endif
- </div>
+      @endforeach
+    </div>
+  @else
+    <div id="payment-empty" class="text-center py-4">
+      <svg class="h-8 w-8 mx-auto text-slate-200 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      <p class="text-xs text-slate-400">Belum ada pembayaran</p>
+    </div>
+  @endif
 </div>

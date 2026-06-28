@@ -44,11 +44,23 @@ class AccountController extends Controller
             ->where('id', $id)
             ->update(array_merge($data, ['updated_at' => now()]));
 
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Akun berhasil diupdate.']);
+        }
+
         return back()->with('success', 'Akun berhasil diupdate.');
     }
 
     public function destroy(int $id)
     {
+        $used = DB::table('journal_entry_lines')
+            ->where('account_id', $id)
+            ->exists();
+
+        if ($used) {
+            return back()->with('error', 'Akun tidak bisa dihapus karena sudah digunakan di jurnal.');
+        }
+
         DB::table('chart_of_accounts')->where('id', $id)->delete();
         return back()->with('success', 'Akun berhasil dihapus.');
     }

@@ -112,7 +112,7 @@ protected function activeCart()
     if ($price !== null) return (float)$price;
 
     // 2) Coba kolom umum di products (pakai yang ada)
-    foreach (['sell_price','retail_price','price'] as $col) {
+    foreach (['selling_price','sell_price','retail_price','price'] as $col) {
         $val = DB::table('products')->where('id', $productId)->value($col);
         if ($val !== null) return (float)$val;
     }
@@ -234,10 +234,15 @@ protected function syncSaleLinesFromProjectAll(int $saleId, int $projectId, int 
     }
 }
 /**
- * Ambil angka HPP dari kolom products.notes (format: "hpp:33000" atau "HPP: 33.000").
+ * Ambil angka HPP dari kolom products.hpp (fallback ke notes untuk legacy).
  */
-protected function parseHppFromNotes(?string $notes): float
+protected function parseHppFromNotes(?string $notes, ?float $hppColumn = null): float
 {
+    // Prioritas: kolom hpp
+    if (!empty($hppColumn) && (float) $hppColumn > 0) {
+        return (float) $hppColumn;
+    }
+    // Fallback: parse dari notes
     if (!$notes) return 0.0;
     if (preg_match('/hpp\s*:\s*([0-9\.\,]+)/i', $notes, $m)) {
         $onlyDigits = preg_replace('/[^\d]/', '', $m[1]); // buang titik/koma/simbol lain
@@ -249,8 +254,9 @@ protected function parseHppFromNotes(?string $notes): float
 /** Ambil HPP per product_id */
 protected function productHpp(int $productId): float
 {
-    $notes = DB::table('products')->where('id', $productId)->value('notes');
-    return $this->parseHppFromNotes($notes);
+    $product = DB::table('products')->where('id', $productId)->select('hpp', 'notes')->first();
+    if (!$product) return 0.0;
+    return $this->parseHppFromNotes($product->notes, $product->hpp);
 }
 
     /* =======================
@@ -278,26 +284,24 @@ protected function productHpp(int $productId): float
 public function create(Request $req)
 {
     $branchId   = $this->branchId();
-    $storeLocId = DB::table('stock_locations')
-        ->where('branch_id', $branchId)->where('type','STORE')
+    $availableLocId = DB::table('stock_locations')
+        ->where('branch_id', $branchId)->where('type','AVAILABLE')
         ->value('id');
 
-// Di dalam ProjectController.php -> create()
-
 $products = DB::table('products as p')
-    ->join('stock_quants as q', function($j) use ($storeLocId) {
+    ->join('stock_quants as q', function($j) use ($availableLocId) {
         $j->on('q.product_id','=','p.id');
-        if ($storeLocId) $j->where('q.location_id','=',$storeLocId);
+        if ($availableLocId) $j->where('q.location_id','=',$availableLocId);
         else $j->whereRaw('1=0');
     })
     ->where('p.is_active',1)
-    ->where('q.qty', '>', 0) // <-- PERUBAHAN DI SINI
+    ->where('q.qty', '>', 0)
     ->orderBy('p.name')
     ->limit(300)
-    ->selectRaw('p.*, q.qty as stock_qty') // Gunakan q.qty langsung karena kita pakai inner join
+    ->selectRaw('p.*, q.qty as stock_qty')
     ->get()
     ->map(function ($p) {
-        $p->hpp = $this->parseHppFromNotes($p->notes ?? '');
+        $p->hpp = $this->parseHppFromNotes($p->notes ?? '', $p->hpp ?? null);
         return $p;
     });
 
@@ -445,6 +449,14 @@ protected function getOrCreateProjectSale(int $projectId)
         $this->syncSaleLinesFromProject($saleId, (int)$project->id, (int)$project->branch_id);
         $this->refreshSaleTotal($saleId);
 
+        // Akrual billing: akui pendapatan + piutang saat tagihan diterbitkan.
+        $srvId          = (int) $this->ensureServiceProduct()->id;
+        $total          = (float) DB::table('pos_sales')->where('id', $saleId)->value('total');
+        $serviceRevenue = (float) DB::table('pos_sale_lines')
+            ->where('pos_sale_id', $saleId)->where('product_id', $srvId)->sum('subtotal');
+        $goodsRevenue   = max(0.0, $total - $serviceRevenue);
+        \App\Services\AccountingService::journalProjectBilling($saleId, $goodsRevenue, $serviceRevenue, $project->customer_id, (int) $project->branch_id);
+
         return DB::table('pos_sales')->where('id', $saleId)->first();
     });
 }
@@ -479,8 +491,9 @@ protected function syncServiceLinesFromProject(int $saleId, int $serviceProductI
  * Ambil harga jual produk untuk keperluan billing proyek.
  * Urutan sumber:
  * 1) product_prices (branch-specific lalu default/null)
- * 2) kolom products.selling_price atau products.price (jika ada)
- * 3) parse "hpp:xxxxx" dari products.notes (fallback). 
+ * 2) kolom products.selling_price
+ * 3) kolom products.hpp (fallback)
+ * 4) parse "hpp:xxxxx" dari products.notes (legacy fallback). 
  *    (Jika tidak ada semuanya → 0)
  */
 protected function getProductSellPrice(int $productId, ?int $branchId = null): float
@@ -504,20 +517,20 @@ protected function getProductSellPrice(int $productId, ?int $branchId = null): f
         }
     }
 
-    // 2) Kolom pada products (jika tersedia)
-    if (Schema::hasColumn('products', 'selling_price')) {
-        $p = DB::table('products')->select('selling_price')->where('id', $productId)->first();
-        if ($p && $p->selling_price !== null) return (float)$p->selling_price;
-    }
-    if (Schema::hasColumn('products', 'price')) {
-        $p = DB::table('products')->select('price')->where('id', $productId)->first();
-        if ($p && $p->price !== null) return (float)$p->price;
+    // 2) Kolom products.selling_price
+    $product = DB::table('products')->select('selling_price', 'hpp', 'notes')->where('id', $productId)->first();
+    if ($product && !empty($product->selling_price) && (float) $product->selling_price > 0) {
+        return (float) $product->selling_price;
     }
 
-    // 3) Fallback: parse "hpp:xxxxx" dari notes
-    $notes = (string) DB::table('products')->where('id', $productId)->value('notes');
+    // 3) Kolom products.hpp (fallback)
+    if ($product && !empty($product->hpp) && (float) $product->hpp > 0) {
+        return (float) $product->hpp;
+    }
+
+    // 4) Fallback: parse "hpp:xxxxx" dari notes (legacy)
+    $notes = (string) ($product->notes ?? '');
     if ($notes && preg_match('/hpp\s*:\s*([0-9]+)/i', $notes, $m)) {
-        // Pakai nilai HPP apa adanya sebagai harga fallback
         return (float)$m[1];
     }
 
@@ -542,15 +555,22 @@ protected function ensureUomMeterId(): int
     ]);
 }
 
-/** Ambil HPP dari products.notes dengan pola: hpp:33000 */
+/** Ambil HPP dari products.hpp (fallback ke notes untuk legacy) */
 protected function parseHpp(int $productId): float
 {
-    $notes = (string) (DB::table('products')->where('id',$productId)->value('notes') ?? '');
+    $product = DB::table('products')->where('id', $productId)->select('hpp', 'notes')->first();
+    if (!$product) return 0.0;
+    
+    // Prioritas: kolom hpp
+    if (!empty($product->hpp) && (float) $product->hpp > 0) {
+        return (float) $product->hpp;
+    }
+    
+    // Fallback: parse dari notes
+    $notes = (string) ($product->notes ?? '');
     if ($notes === '') return 0.0;
-
-    // cari "hpp:xxxxx" (angka boleh ada titik)
     if (preg_match('/hpp\s*:\s*([0-9\.]+)/i', $notes, $m)) {
-        return (float) str_replace('.', '', $m[1]); // biasanya HPP ditulis tanpa koma
+        return (float) str_replace('.', '', $m[1]);
     }
     return 0.0;
 }
@@ -563,7 +583,7 @@ protected function parseHpp(int $productId): float
  *
  * Baris lama di pos_sale_lines sale ini akan DIHAPUS lalu diisi ulang.
  */
-protected function syncSaleLinesFromProject(int $saleId, int $projectId): void
+protected function syncSaleLinesFromProject(int $saleId, int $projectId, ?int $branchId = null): void
 {
     $meterUom = $this->ensureUomMeterId();
 
@@ -745,13 +765,13 @@ public function cartAdd(Request $req)
             'qty'        => 'required|numeric|min:0.001',
         ]);
 
-        $p = DB::table('products')->select('id','name','notes')->where('id',$v['product_id'])->first();
+        $p = DB::table('products')->select('id','name','hpp','notes')->where('id',$v['product_id'])->first();
         $u = DB::table('uoms')->select('id','code')->where('id',$v['uom_id'])->first();
         $hpp = (float) $this->productHpp((int)$v['product_id']);
         // ===== HPP WAJIB DIISI KE CART =====
         $price = $this->productHpp((int)$p->id);
         if ($price <= 0 && !empty($p->notes)) {
-            // fallback: parse "hpp:33000" di kolom notes
+            // fallback: parse "hpp:33000" di kolom notes (legacy)
             if (preg_match('/hpp\s*:\s*([0-9\.\,]+)/i', $p->notes, $m)) {
                 $num = str_replace(['.', ' '], '', $m[1]); // ribuan
                 $num = str_replace(',', '.', $num);        // desimal
@@ -766,7 +786,7 @@ public function cartAdd(Request $req)
             'uom_id'     => (int) $v['uom_id'],
             'uom'        => (string) $u->code,
             'qty'        => (float) $v['qty'],
-            'price'      => $hpp,                  // ← penting
+            'price'      => $this->getProductSellPrice((int) $v['product_id'], $this->branchId()), // harga jual (margin)
         ];
         $this->saveCart($cart);
 
@@ -988,11 +1008,16 @@ DB::transaction(function () use ($sale, $v) { // $v adalah hasil validasi
 
     if ($appliedAmount > 0) {
         DB::table('pos_payments')->insert([
-            'pos_sale_id' => $sale->id,       // <-- Perbaikan bug ketik
-            'method'      => $v['method'],     // <-- Perbaikan bug ketik
-            'amount'      => $appliedAmount, // <-- PERBAIKAN LOGIKA
-            'ref_no'      => $v['ref_no'],     // <-- Perbaikan bug ketik
+            'pos_sale_id' => $sale->id,
+            'method'      => $v['method'],
+            'amount'      => $appliedAmount,
+            'ref_no'      => $v['ref_no'] ?? null,
         ]);
+
+        // === AKUNTANSI: penerimaan kas (dalam transaksi agar atomik) ===
+        \App\Services\AccountingService::journalCollectPayment(
+            $appliedAmount, $sale->customer_id, $sale->branch_id, $v['method']
+        );
     }
 
     // [+] Hitung total bayar TERBARU setelah insert
@@ -1005,16 +1030,21 @@ DB::transaction(function () use ($sale, $v) { // $v adalah hasil validasi
     }
 });
 
-            // === AKUNTANSI: Jurnal pembayaran customer ===
-            if ($appliedAmount > 0) {
-                \App\Services\AccountingService::journalCollectPayment(
-                    $appliedAmount,
-                    $sale->customer_id,
-                    $sale->branch_id
-                );
-            }
-
             return back()->with('ok', 'Pembayaran ditambahkan.');
+}
+
+/**
+ * Hapus semua pembayaran untuk billing project.
+ */
+public function billClear(int $projectId)
+{
+    $sale = $this->getOrCreateProjectSale($projectId);
+
+    DB::table('pos_payments')->where('pos_sale_id', $sale->id)->delete();
+    DB::table('pos_sales')->where('id', $sale->id)->update(['status' => 'DRAFT']);
+    DB::table('projects')->where('id', $projectId)->update(['status' => 'READY_TO_BILL']);
+
+    return back()->with('ok', 'Semua pembayaran proyek dihapus.');
 }
 
 /**
@@ -1125,6 +1155,20 @@ public function billShow(int $projectId)
      |=======================*/
 public function finalize(Request $req)
 {
+    // Anti double-submit: kunci per user agar klik/retry bersamaan tak menduplikasi proyek.
+    $lock = \Illuminate\Support\Facades\Cache::lock('project-finalize-'.(int) (auth()->id() ?? 0), 10);
+    if (! $lock->get()) {
+        return back()->withErrors('Proyek sebelumnya masih diproses. Coba lagi sebentar.')->withInput();
+    }
+    try {
+        return $this->performFinalize($req);
+    } finally {
+        $lock->release();
+    }
+}
+
+private function performFinalize(Request $req)
+{
     $data = $req->validate([
         'title'       => 'required|string|max:160',
         'customer_id' => 'nullable|integer|exists:customers,id',
@@ -1154,10 +1198,10 @@ public function finalize(Request $req)
     $seq=1; do { $code=$codeBase.str_pad((string)$seq,4,'0',STR_PAD_LEFT); $seq++; }
     while (DB::table('projects')->where('code',$code)->exists());
 
-    // lokasi default
+    // lokasi default — gunakan AVAILABLE (stok awal dari seeder)
     $storeLocId = (int) DB::table('stock_locations')
-        ->where('branch_id',$branchId)->where('type','STORE')->value('id');
-    abort_if(!$storeLocId, 422, 'Lokasi STORE untuk branch belum ada.');
+        ->where('branch_id',$branchId)->where('type','AVAILABLE')->value('id');
+    abort_if(!$storeLocId, 422, 'Lokasi AVAILABLE untuk branch belum ada.');
 
     $projectId = DB::transaction(function () use ($req,$uid,$branchId,$code,$cart,$services,$storeLocId,$data,$useLeftovers) {
         $now = now();
@@ -1352,6 +1396,40 @@ if ($change > 0 && $req->input('pay_method') === 'CASH') {
             'payload'=>json_encode(['cart'=>$cart,'services'=>$services]),'created_at'=>$now,
         ]);
 
+        // 8) AKUNTANSI (akrual, di dalam transaksi agar atomik dengan billing)
+        $serviceRevenue = 0.0;
+        foreach (($services ?? []) as $s) {
+            $serviceRevenue += (float) ($s['price'] ?? 0);
+        }
+        $goodsRevenue = max(0.0, $total - $serviceRevenue);
+        \App\Services\AccountingService::journalProjectBilling($saleId, $goodsRevenue, $serviceRevenue, $data['customer_id'] ?? null, $branchId);
+
+        if ($appliedAmount > 0) {
+            \App\Services\AccountingService::journalCollectPayment($appliedAmount, $data['customer_id'] ?? null, $branchId, $req->input('pay_method'));
+        }
+
+        // COGS: material di HPP + konsumsi leftover
+        $cogs = 0.0;
+        foreach (($cart['materials'] ?? []) as $m) {
+            $pid = (int) ($m['product_id'] ?? 0);
+            $qty = (float) ($m['qty'] ?? 0);
+            if ($pid > 0 && $qty > 0) {
+                $cogs += $qty * $this->productHpp($pid);
+            }
+        }
+        foreach ($useLeftovers as $r) {
+            $pieceId = (int) ($r['piece_id'] ?? 0);
+            $used    = (float) ($r['used_length_m'] ?? 0);
+            if ($pieceId <= 0 || $used <= 0) continue;
+            $costPerM = (float) DB::table('leftover_pieces')->where('id', $pieceId)->value('cost_per_m') ?? 0;
+            if ($costPerM > 0) {
+                $cogs += $used * $costPerM;
+            }
+        }
+        if ($cogs > 0) {
+            \App\Services\AccountingService::journalPosCogs($saleId, $cogs, $branchId);
+        }
+
         return $projectId;
     });
 
@@ -1438,10 +1516,10 @@ public function returnProcess(Request $req, $id)
         $branchId = (int)$project->branch_id;
         $userId = (int)auth()->id();
         
-        // Ambil lokasi gudang utama untuk branch ini
+        // Ambil lokasi AVAILABLE untuk branch ini
         $storeLocId = (int) DB::table('stock_locations')
-            ->where('branch_id', $branchId)->where('type', 'STORE')->value('id');
-        abort_if(!$storeLocId, 422, 'Lokasi STORE untuk branch ini tidak ditemukan.');
+            ->where('branch_id', $branchId)->where('type', 'AVAILABLE')->value('id');
+        abort_if(!$storeLocId, 422, 'Lokasi AVAILABLE untuk branch ini tidak ditemukan.');
 
         foreach ($rows as $it) {
             $productId = (int)$it['product_id'];
@@ -1454,10 +1532,16 @@ public function returnProcess(Request $req, $id)
 
             if ($isLengthBased && isset($it['length_m'])) {
                 // --- PROSES SEBAGAI SISA POTONGAN (LEFTOVER) ---
+                // Ambil HPP produk untuk cost_per_m
+                $productHpp = (float) DB::table('products')->where('id', $productId)->value('hpp') ?? 0;
+                $lengthCm = (float) $productLength;
+                $costPerM = $lengthCm > 0 ? round($productHpp / ($lengthCm / 100.0), 2) : 0;
+
                 DB::table('leftover_pieces')->insert([
                     'branch_id'   => $branchId,
                     'product_id'  => $productId,
                     'length_m'    => (float)$it['length_m'],
+                    'cost_per_m'  => $costPerM,
                     'condition'   => $condition,
                     'source_type' => 'PROJECT_RETURN',
                     'source_id'   => (int)$project->id,
@@ -1673,13 +1757,6 @@ public function printInvoiceByProject(int $projectId)
 
 
 
-
-    public function printInvoice($saleId)
-    {
-        // Disediakan jika Anda tetap ingin pakai POS invoice.
-        // Untuk scope ini, buat tampilan minimal atau redirect.
-        abort(404, 'Invoice POS tidak di-handle di modul projek.');
-    }
 
     /* =======================
      | Stock helpers (sederhana)

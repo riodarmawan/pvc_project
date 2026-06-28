@@ -24,7 +24,7 @@ DB_NAME = os.getenv("DB_NAME", "")
 DB_USER = os.getenv("DB_USER", "root")
 DB_PASS = os.getenv("DB_PASS", "")
 
-PRICE_MARKUP = float(os.getenv("PRICE_MARKUP", "1.0"))
+PRICE_MARKUP = float(os.getenv("PRICE_MARKUP", "1.0"))  # DEPRECATED — unused, kept for env compat
 INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "super-secret-token")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -116,21 +116,37 @@ def require_internal_token(x_internal_token: str = Header(default="")):
     return True
 
 # =======================
-# Helper HPP → price (samakan regex PHP)
+# Helper resolve harga jual (kolom selling_price → hpp → notes fallback)
 # =======================
 HPP_RE = re.compile(r'hpp\s*[:=]\s*([\d\.]+)', re.IGNORECASE)
 
-def price_from_notes(notes: Optional[str]) -> float:
-    hpp = 0.0
+def resolve_selling_price(selling_price, hpp, notes: Optional[str] = None) -> float:
+    """Resolve harga jual: selling_price → hpp → parse notes → 0"""
+    # 1. selling_price dari kolom produk
+    if selling_price is not None:
+        try:
+            sp = float(selling_price)
+            if sp > 0:
+                return round(sp, 2)
+        except (ValueError, TypeError):
+            pass
+    # 2. hpp dari kolom produk
+    if hpp is not None:
+        try:
+            h = float(hpp)
+            if h > 0:
+                return round(h, 2)
+        except (ValueError, TypeError):
+            pass
+    # 3. Fallback: parse dari notes (legacy)
     if notes:
         m = HPP_RE.search(str(notes))
         if m:
             try:
-                hpp = float(m.group(1))
+                return round(float(m.group(1)), 2)
             except ValueError:
-                hpp = 0.0
-    price = hpp * PRICE_MARKUP
-    return round(price if price else 0.0, 2)
+                pass
+    return 0.0
 
 # =======================
 # Error helper
@@ -260,6 +276,8 @@ def query_catalog(conn, branch_id: int, q: Optional[str], cat_id: Optional[int])
             p.id,
             p.name,
             c.name AS category_name,
+            p.selling_price,
+            p.hpp,
             p.notes,
             (
                 SELECT IFNULL(SUM(sq.qty), 0)
@@ -298,7 +316,7 @@ def query_catalog(conn, branch_id: int, q: Optional[str], cat_id: Optional[int])
             "name": m.get("name", ""),
             "category_name": m.get("category_name"),
             "stock": int(math.floor(float(m.get("stock", 0) or 0))),
-            "price": price_from_notes(m.get("notes")),
+            "price": resolve_selling_price(m.get("selling_price"), m.get("hpp"), m.get("notes")),
         })
     return out
 

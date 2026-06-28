@@ -5,12 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class PosController extends Controller
 {
-    /** markup harga dari HPP (contoh 30%) */
-    private const PRICE_MARKUP = 1;
 
     /* =========================================================
      *  PAGE: KATALOG (/kasir)
@@ -40,9 +39,9 @@ class PosController extends Controller
         // Jika tidak ada lokasi sama sekali, gunakan angka mustahil (-1) agar query tidak error.
         $locationIdsString = !empty($branchLocationIds) ? implode(',', $branchLocationIds) : '-1';
 
-        // ambil produk + harga (hpp*markup) + stok TOTAL di cabang
+        // ambil produk + harga jual + stok TOTAL di cabang
         $query = DB::table('products as p')
-            ->selectRaw('p.id, p.sku, p.name, p.category_id, p.uom_id, p.notes')
+            ->selectRaw('p.id, p.sku, p.name, p.category_id, p.uom_id, p.hpp, p.selling_price, p.notes')
             // 2. Ubah subquery untuk menjumlahkan stok dari SEMUA lokasi di cabang tersebut.
             ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
                                  FROM stock_quants sq
@@ -67,18 +66,97 @@ class PosController extends Controller
         // pagination katalog
         $products = $query->paginate(20)->withQueryString();
 
-        // hitung price dari notes->hpp
+        // hitung price dari selling_price (fallback ke hpp jika kosong)
         $products->getCollection()->transform(function ($row) {
-            $row->price = $this->priceFromNotes($row->notes);
+            $row->price = $this->resolveSellingPrice($row->selling_price, $row->hpp);
             $row->stock = (int) floor((float) ($row->stock ?? 0));
             return $row;
         });
+
+        // AJAX: return only catalog HTML
+        if ($request->ajax() && $request->has('ajax_catalog')) {
+            $html = view('kasir.partials._catalog', ['products' => $products])->render();
+            return response()->json(['html' => $html]);
+        }
 
         return view('kasir.index', [
             'categories' => $categories,
             'products'   => $products,
             'q'          => $q,
             'catId'      => $catId,
+        ]);
+    }
+
+
+    /* =========================================================
+     *  PAGE: POS SINGLE-PAGE (/kasir/pos)
+     * =======================================================*/
+    public function pos(Request $request)
+    {
+        $user     = Auth::user();
+        $branchId = (int) ($user->default_branch_id ?? 0);
+
+        $categories = DB::table('product_categories')->orderBy('name')->get();
+
+        $q     = trim((string) $request->get('q', ''));
+        $catId = $request->get('cat_id');
+
+        // Location IDs for this branch
+        $branchLocationIds = DB::table('stock_locations')
+            ->where('branch_id', $branchId)
+            ->pluck('id')
+            ->all();
+        $locationIdsString = !empty($branchLocationIds) ? implode(',', $branchLocationIds) : '-1';
+
+        $query = DB::table('products as p')
+            ->selectRaw('p.id, p.sku, p.name, p.category_id, p.uom_id, p.hpp, p.selling_price, p.notes')
+            ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
+                                 FROM stock_quants sq
+                                 WHERE sq.product_id = p.id
+                                   AND sq.location_id IN ({$locationIdsString})) as stock"));
+
+        if ($q !== '') {
+            $query->where(function ($w) use ($q) {
+                $w->where('p.sku', 'like', "%{$q}%")
+                  ->orWhere('p.name', 'like', "%{$q}%");
+            });
+        }
+        if (!empty($catId)) {
+            $query->where('p.category_id', (int)$catId);
+        }
+
+        $query->orderBy('p.name');
+        $products = $query->paginate(20)->withQueryString();
+
+        $products->getCollection()->transform(function ($row) {
+            $row->price = $this->resolveSellingPrice($row->selling_price, $row->hpp);
+            $row->stock = (int) floor((float) ($row->stock ?? 0));
+            return $row;
+        });
+
+        // AJAX: return only catalog HTML for search/filter
+        if ($request->ajax() && $request->has('ajax_catalog')) {
+            $html = view('kasir.partials._pos_catalog', ['products' => $products])->render();
+            return response()->json(['html' => $html]);
+        }
+
+        $cart       = $this->sessionCart();
+        $payments   = $this->sessionPayments();
+        $customerId = (int) session('pos.customer_id');
+        [$total, $paid, $due] = $this->totals($cart, $payments);
+
+        return view('kasir.pos', [
+            'categories'       => $categories,
+            'products'         => $products,
+            'q'                => $q,
+            'catId'            => $catId,
+            'cart'             => $cart,
+            'payments'         => $payments,
+            'customerId'       => $customerId,
+            'selectedCustomer' => $this->selectedCustomer($customerId),
+            'total'            => $total,
+            'paid'             => $paid,
+            'due'              => $due,
         ]);
     }
 
@@ -105,11 +183,24 @@ class PosController extends Controller
 
     [$total, $paid, $due] = $this->totals($cart, $payments);
 
+    // AJAX customer search: return JSON with partial HTML
+    if ($request->ajax() && $request->has('cq')) {
+        $customerHtml = view('kasir.partials._customer', [
+            'customerId'       => $customerId,
+            'selectedCustomer' => $this->selectedCustomer($customerId),
+            'customerResults'  => $customerResults,
+        ])->render();
+        return response()->json([
+            'ok' => true,
+            'html' => ['customer' => $customerHtml],
+        ]);
+    }
+
     return view('kasir.checkout', [
         'cart'             => array_values($cart),
         'payments'         => $payments,
         'customerId'       => $customerId,
-        'selectedCustomer' => $this->selectedCustomer($customerId), // << penting
+        'selectedCustomer' => $this->selectedCustomer($customerId),
         'customerResults'  => $customerResults,
         'total'            => $total,
         'paid'             => $paid,
@@ -140,8 +231,12 @@ class PosController extends Controller
             return $this->jsonError('Produk tidak ditemukan.');
         }
 
-        // harga dari notes->hpp * markup
-        $price = $this->priceFromNotes($product->notes);
+        // Cegah jual diam-diam di harga modal: harga jual wajib diset.
+        if (empty($product->selling_price) || (float) $product->selling_price <= 0) {
+            return $this->jsonError("Harga jual untuk {$product->name} belum diset.");
+        }
+
+        $price = $this->resolveSellingPrice($product->selling_price, $product->hpp);
 
         // stok available
         $available = $this->availableStock($pid, $branchId);
@@ -235,6 +330,30 @@ return $this->respond($request, [
     /* =========================================================
      *  CUSTOMER
      * =======================================================*/
+
+    /** Search customers by name/phone (AJAX) */
+    public function customerSearch(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (strlen($q) < 1) {
+            return response()->json(['ok' => true, 'customers' => []]);
+        }
+
+        $customers = DB::table('customers')
+            ->where('name', 'like', "%{$q}%")
+            ->orWhere('phone', 'like', "%{$q}%")
+            ->orderBy('name')
+            ->limit(10)
+            ->get()
+            ->map(fn($c) => [
+                'id'    => $c->id,
+                'name'  => $c->name,
+                'phone' => $c->phone,
+            ]);
+
+        return response()->json(['ok' => true, 'customers' => $customers]);
+    }
+
    public function customerSelect(Request $request)
 {
     // Jika tombol "Hapus Pilihan" ditekan
@@ -310,6 +429,20 @@ return $this->respond($request, [
      * =======================================================*/
 public function finalize(Request $request)
 {
+    // Anti double-submit: kunci per kasir agar klik/retry bersamaan tak menduplikasi.
+    $lock = Cache::lock('pos-finalize-'.(int) (Auth::id() ?? 0), 10);
+    if (! $lock->get()) {
+        return $this->jsonError('Transaksi sebelumnya masih diproses. Coba lagi sebentar.');
+    }
+    try {
+        return $this->performFinalize($request);
+    } finally {
+        $lock->release();
+    }
+}
+
+private function performFinalize(Request $request)
+{
     $user     = Auth::user();
     $branchId = (int) ($user->default_branch_id ?? 0);
 
@@ -321,8 +454,13 @@ public function finalize(Request $request)
         return $this->jsonError('Keranjang masih kosong.');
     }
 
-    [$total, $paid, $due] = $this->totals($cart, $payments);
-    if ($due > 0.0001) {
+    [$grossTotal, $paid, $due] = $this->totals($cart, $payments);
+
+    // Diskon per nota (level transaksi). Pendapatan diakui netto.
+    $discount = min(max(0.0, (float) $request->input('discount', 0)), $grossTotal);
+    $total    = round($grossTotal - $discount, 2);   // netto yang ditagihkan
+
+    if (round($total - $paid, 2) > 0.0001) {
         return $this->jsonError('Pembayaran belum mencukupi.');
     }
 
@@ -365,7 +503,7 @@ public function finalize(Request $request)
         }
     }
 
-    $saleId = DB::transaction(function () use ($user, $branchId, $cart, $appliedPays, $customerId, $total, $change) {
+    $saleId = DB::transaction(function () use ($user, $branchId, $cart, $appliedPays, $customerId, $total, $discount, $change) {
         // Header
         $saleId = DB::table('pos_sales')->insertGetId([
             'branch_id'    => $branchId,
@@ -374,6 +512,7 @@ public function finalize(Request $request)
             'sale_datetime'=> now(),
             'status'       => 'PAID',
             'total'        => round($total, 2),
+            'discount'     => round($discount, 2),
             // Simpan info kembalian sederhana di notes (bisa dibaca invoice riwayat)
             'notes'        => $change > 0 ? ('CHANGE='.$change) : null,
         ]);
@@ -409,10 +548,23 @@ public function finalize(Request $request)
             ]);
 
             if ($availableLocId) {
+                // Kunci baris stok lalu kurangi dengan guard agar tidak bisa negatif
+                // (anti-oversell pada transaksi bersamaan).
+                $quant = DB::table('stock_quants')
+                    ->where('product_id', $pid)
+                    ->where('location_id', $availableLocId)
+                    ->lockForUpdate()
+                    ->first();
+
+                $current = (float) ($quant->qty ?? 0);
+                if ($current + 0.0001 < (float) $row['qty']) {
+                    abort(422, "Stok {$row['name']} tidak cukup di lokasi penjualan.");
+                }
+
                 DB::table('stock_quants')
                     ->where('product_id', $pid)
                     ->where('location_id', $availableLocId)
-                    ->decrement('qty', (float)$row['qty']);
+                    ->update(['qty' => round($current - (float) $row['qty'], 4)]);
             }
         }
 
@@ -426,15 +578,15 @@ public function finalize(Request $request)
             ]);
         }
 
+        // === AKUNTANSI: Jurnal otomatis (dalam transaksi agar atomik dengan penjualan) ===
+        \App\Services\AccountingService::journalPosSale($saleId, $total, $appliedPays[0]['method'] ?? 'CASH', $customerId, $branchId, $appliedPays);
+        $cogs = \App\Services\AccountingService::calculateCogs($cart);
+        if ($cogs > 0) {
+            \App\Services\AccountingService::journalPosCogs($saleId, $cogs, $branchId);
+        }
+
         return $saleId;
     });
-
-    // === AKUNTANSI: Jurnal otomatis ===
-    \App\Services\AccountingService::journalPosSale($saleId, $total, $appliedPays[0]['method'] ?? 'CASH', $customerId, $branchId);
-    $cogs = \App\Services\AccountingService::calculateCogs($cart);
-    if ($cogs > 0) {
-        \App\Services\AccountingService::journalPosCogs($saleId, $cogs, $branchId);
-    }
 
     // Bersihkan session
     session()->forget(['pos.cart','pos.payments','pos.customer_id']);
@@ -450,48 +602,102 @@ public function finalize(Request $request)
     ], 'kasir.checkout', 'Transaksi selesai.');
 }
 
-    /* =========================================================
-     *  (OPSIONAL) SCAN ADD — tetap disediakan agar route lama tidak error
-     *  Tidak dipakai di UI baru; fungsi ini hanya proxy ke cartAdd.
-     * =======================================================*/
-    public function scanAdd(Request $request)
+    /**
+     * Retur penjualan: kembalikan stok + jurnal pembalik (revenue & HPP). Full-sale.
+     */
+    public function refund(Request $request, $id)
     {
-        $request->validate([
-            'term' => 'required|string|max:160',
-            'qty'  => 'required|integer|min:1',
-        ]);
+        $user     = Auth::user();
+        $branchId = (int) ($user->default_branch_id ?? 0);
 
-        $term = trim($request->input('term'));
-        $qty  = (int)$request->input('qty');
+        $sale = DB::table('pos_sales')->where('id', $id)->where('branch_id', $branchId)->first();
+        if (!$sale) {
+            return $this->jsonError('Penjualan tidak ditemukan.', 404);
+        }
+        if ($sale->status !== 'PAID') {
+            return $this->jsonError('Hanya penjualan berstatus PAID yang dapat diretur.');
+        }
 
-        $product = DB::table('products')
-            ->where('sku', $term)
-            ->orWhere('barcode', $term)
-            ->orWhere('name','like',"%{$term}%")
-            ->orderBy('sku')->first();
+        $reason = trim((string) $request->input('reason')) ?: 'Retur penjualan';
+        $locId  = $this->availableLocationId($branchId);
 
-        if (!$product) return $this->jsonError('Produk tidak ditemukan.');
+        DB::transaction(function () use ($sale, $user, $branchId, $reason, $locId) {
+            $refundId = (int) DB::table('pos_refunds')->insertGetId([
+                'sale_id'     => $sale->id,
+                'approved_by' => (int) $user->id,
+                'reason'      => $reason,
+                'created_at'  => now(),
+            ]);
 
-        // forward ke cartAdd
-        $fake = new Request([
-            'product_id' => (int)$product->id,
-            'qty'        => $qty,
-        ]);
-        return $this->cartAdd($fake);
+            $totalCost = 0.0;
+            foreach (DB::table('pos_sale_lines')->where('pos_sale_id', $sale->id)->get() as $ln) {
+                if ($locId) {
+                    $quant = DB::table('stock_quants')
+                        ->where('product_id', $ln->product_id)->where('location_id', $locId);
+                    if ($quant->exists()) {
+                        $quant->increment('qty', (float) $ln->qty);
+                    } else {
+                        DB::table('stock_quants')->insert([
+                            'product_id' => $ln->product_id, 'location_id' => $locId, 'qty' => (float) $ln->qty,
+                        ]);
+                    }
+                }
+                DB::table('stock_moves')->insert([
+                    'product_id'       => $ln->product_id, 'uom_id' => (int) $ln->uom_id, 'qty' => (float) $ln->qty,
+                    'from_location_id' => null, 'to_location_id' => $locId ?: null,
+                    'ref_type'         => 'POS', 'ref_id' => $refundId, 'state' => 'DONE',
+                    'created_by'       => (int) $user->id, 'created_at' => now(),
+                ]);
+                $hpp = (float) DB::table('products')->where('id', $ln->product_id)->value('hpp');
+                $totalCost += $hpp * (float) $ln->qty;
+            }
+
+            DB::table('pos_sales')->where('id', $sale->id)->update(['status' => 'REFUND']);
+
+            \App\Services\AccountingService::journalPosRefund($refundId, (float) $sale->total, $branchId);
+            \App\Services\AccountingService::journalReturnToInventory($refundId, $totalCost, $branchId);
+        });
+
+        return $this->respond($request, [
+            'ok' => true, 'message' => 'Retur berhasil diproses.',
+        ], 'kasir.history', 'Retur berhasil diproses.');
+    }
+
+    /** Halaman konfirmasi retur (server-rendered). */
+    public function refundConfirm($id)
+    {
+        $user     = Auth::user();
+        $branchId = (int) ($user->default_branch_id ?? 0);
+
+        $sale = DB::table('pos_sales')->where('id', $id)->where('branch_id', $branchId)->first();
+        if (!$sale) {
+            return redirect()->route('kasir.history')->withErrors('Transaksi tidak ditemukan.');
+        }
+        if ($sale->status !== 'PAID') {
+            return redirect()->route('kasir.history')->withErrors('Hanya penjualan berstatus PAID yang dapat diretur.');
+        }
+
+        $lines = DB::table('pos_sale_lines as l')
+            ->join('products as p', 'p.id', '=', 'l.product_id')
+            ->where('l.pos_sale_id', $sale->id)
+            ->selectRaw('p.sku, p.name, l.qty, l.price, l.subtotal')
+            ->get();
+
+        return view('kasir.refund_confirm', ['sale' => $sale, 'lines' => $lines]);
     }
 
     /* =========================================================
      *  HELPERS
      * =======================================================*/
 
-    private function priceFromNotes($notes): float
+    private function resolveSellingPrice($sellingPrice, $hpp): float
     {
-        $hpp = 0.0;
-        if ($notes && preg_match('/hpp\s*:\s*([\d\.]+)/i', (string)$notes, $m)) {
-            $hpp = (float)$m[1];
+        // Prioritas: selling_price
+        if (!empty($sellingPrice) && (float) $sellingPrice > 0) {
+            return round((float) $sellingPrice, 2);
         }
-        $price = $hpp * self::PRICE_MARKUP;
-        return round($price ?: 0.0, 2);
+        // Fallback: harga beli (hpp) tanpa markup
+        return round((float) ($hpp ?? 0), 2);
     }
 
     private function availableLocationId(int $branchId): ?int

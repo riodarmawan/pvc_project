@@ -56,6 +56,16 @@ class ProductImportController extends Controller
             } else {
                  $uniqueSkus[] = $sku;
             }
+
+            // Produk BARU wajib punya HPP & harga jual (>0) agar COGS/laba akurat.
+            if (!DB::table('products')->where('sku', $sku)->exists()) {
+                if ((float) ($row[4] ?? 0) <= 0) {
+                    $failures[] = "Baris {$rowNumber}: HPP wajib > 0 untuk produk baru '{$sku}'.";
+                }
+                if ((float) ($row[11] ?? 0) <= 0) {
+                    $failures[] = "Baris {$rowNumber}: Harga jual wajib > 0 untuk produk baru '{$sku}'.";
+                }
+            }
         }
 
         if (!empty($failures)) {
@@ -89,42 +99,59 @@ class ProductImportController extends Controller
                 $productId = null;
                 $uomId = null;
 
+                // Parse data dari Excel
+                $namaProduk   = trim($row[1] ?? $sku);
+                $kategoriKode = strtoupper(trim($row[2] ?? 'UNCATEGORIZED'));
+                $satuanKode   = strtoupper(trim($row[3] ?? 'PCS'));
+                $hpp          = (float) ($row[4] ?? 0);
+                $catatanAwal  = trim($row[10] ?? '');
+                $barcode      = trim($row[6] ?? null);
+                $lengthCm     = empty($row[7]) ? null : (int)$row[7];
+                $widthMm      = empty($row[8]) ? null : (int)$row[8];
+                $thicknessMm  = empty($row[9]) ? null : (float)$row[9];
+                $sellingPrice = !empty($row[11]) ? (float) $row[11] : null;
+
+                // Cari atau buat Kategori
+                if (!isset($categoryCache[$kategoriKode])) {
+                    $category = DB::table('product_categories')->where('code', $kategoriKode)->first();
+                    $categoryCache[$kategoriKode] = $category ? $category->id : DB::table('product_categories')->insertGetId(['code' => $kategoriKode, 'name' => $kategoriKode]);
+                }
+                $categoryId = $categoryCache[$kategoriKode];
+                
+                // Cari atau buat Satuan (UOM)
+                if (!isset($uomCache[$satuanKode])) {
+                    $uom = DB::table('uoms')->where('code', $satuanKode)->first();
+                    $uomCache[$satuanKode] = $uom ? $uom->id : DB::table('uoms')->insertGetId(['code' => $satuanKode, 'name' => $satuanKode]);
+                }
+                $uomId = $uomCache[$satuanKode];
+
                 if ($existingProduct) {
-                    // --- PRODUK SUDAH ADA ---
-                    // Langsung gunakan ID yang ada
+                    // --- PRODUK SUDAH ADA → UPDATE data ---
                     $productId = $existingProduct->id;
                     $uomId = $existingProduct->uom_id;
 
+                    DB::table('products')->where('id', $productId)->update([
+                        'name'          => $namaProduk,
+                        'category_id'   => $categoryId,
+                        'uom_id'        => $uomId,
+                        'hpp'           => $hpp > 0 ? $hpp : $existingProduct->hpp,
+                        'selling_price' => $sellingPrice ?? $existingProduct->selling_price,
+                        'barcode'       => $barcode ?: $existingProduct->barcode,
+                        'length_cm'     => $lengthCm ?? $existingProduct->length_cm,
+                        'width_mm'      => $widthMm ?? $existingProduct->width_mm,
+                        'thickness_mm'  => $thicknessMm ?? $existingProduct->thickness_mm,
+                        'notes'         => trim(preg_replace('/hpp\s*:\s*[0-9\.]+/i', '', $catatanAwal)) ?: $existingProduct->notes,
+                    ]);
+
                 } else {
-                    // --- PRODUK BARU ---
-                    // Siapkan data master baru
-                    $namaProduk   = trim($row[1] ?? $sku);
-                    $kategoriKode = strtoupper(trim($row[2] ?? 'UNCATEGORIZED'));
-                    $satuanKode   = strtoupper(trim($row[3] ?? 'PCS'));
-                    $hpp          = (float) ($row[4] ?? 0);
-                    $catatanAwal  = trim($row[10] ?? '');
-                    
-                    // Cari atau buat Kategori
-                    if (!isset($categoryCache[$kategoriKode])) {
-                        $category = DB::table('product_categories')->where('code', $kategoriKode)->first();
-                        $categoryCache[$kategoriKode] = $category ? $category->id : DB::table('product_categories')->insertGetId(['code' => $kategoriKode, 'name' => $kategoriKode]);
-                    }
-                    $categoryId = $categoryCache[$kategoriKode];
-                    
-                    // Cari atau buat Satuan (UOM)
-                    if (!isset($uomCache[$satuanKode])) {
-                        $uom = DB::table('uoms')->where('code', $satuanKode)->first();
-                        $uomCache[$satuanKode] = $uom ? $uom->id : DB::table('uoms')->insertGetId(['code' => $satuanKode, 'name' => $satuanKode]);
-                    }
-                    $uomId = $uomCache[$satuanKode];
+                    // --- PRODUK BARU → INSERT ---
+                    $notes = trim(preg_replace('/hpp\s*:\s*[0-9\.]+/i', '', $catatanAwal));
 
-                    $notes = trim(preg_replace('/hpp\s*:\s*[0-9\.]+/i', '', $catatanAwal) . ' hpp:' . $hpp);
-
-                    // Buat produk baru di database
                     $productId = DB::table('products')->insertGetId([
-                        'sku' => $sku, 'name' => $namaProduk, 'category_id' => $categoryId, 'uom_id' => $uomId, 'notes' => $notes,
-                        'barcode' => trim($row[6] ?? null), 'length_cm' => empty($row[7]) ? null : (int)$row[7],
-                        'width_mm' => empty($row[8]) ? null : (int)$row[8], 'thickness_mm' => empty($row[9]) ? null : (float)$row[9],
+                        'sku' => $sku, 'name' => $namaProduk, 'category_id' => $categoryId, 'uom_id' => $uomId,
+                        'hpp' => $hpp, 'selling_price' => $sellingPrice, 'notes' => $notes,
+                        'barcode' => $barcode, 'length_cm' => $lengthCm,
+                        'width_mm' => $widthMm, 'thickness_mm' => $thicknessMm,
                         'is_active' => 1,
                     ]);
                 }

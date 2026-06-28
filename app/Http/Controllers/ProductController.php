@@ -14,11 +14,14 @@ class ProductController extends Controller
      */
     public function create()
     {
-        // Ambil data master untuk mengisi dropdown di form
         $categories = DB::table('product_categories')->orderBy('name')->get();
         $uoms = DB::table('uoms')->orderBy('name')->get();
 
-        return view('products.create', [
+        $view = request()->routeIs('kasir.products.new')
+            ? 'kasir.products.create'
+            : 'products.create';
+
+        return view($view, [
             'categories' => $categories,
             'uoms'       => $uoms,
         ]);
@@ -35,7 +38,8 @@ class ProductController extends Controller
             'sku'             => ['required', 'string', 'max:50', 'unique:products,sku'],
             'name'            => ['required', 'string', 'max:160'],
             'uom_id'          => ['required', 'integer', 'exists:uoms,id'],
-            'hpp'             => ['nullable', 'numeric', 'min:0'], // Validasi untuk HPP
+            'hpp'             => ['required', 'numeric', 'min:0'],
+            'selling_price'   => ['required', 'numeric', 'min:0'],
             
             // Kategori: salah satu harus diisi, tapi tidak keduanya
             'category_id'       => ['nullable', 'required_without:new_category_name', 'exists:product_categories,id'],
@@ -76,23 +80,25 @@ class ProductController extends Controller
                 ]);
             }
 
-            // Logika untuk menggabungkan HPP ke dalam kolom notes
+            // Logika untuk menggabungkan HPP ke dalam kolom notes (legacy)
             $notes = $data['notes'] ?? '';
+            $hppValue = null;
             if (!empty($data['hpp'])) {
-                // Hapus entri hpp lama jika ada, untuk menghindari duplikasi
+                $hppValue = (float) $data['hpp'];
+                // Hapus entri hpp lama dari notes jika ada
                 $notes = preg_replace('/hpp\s*:\s*[0-9\.]+\s*/i', '', $notes);
-                // Tambahkan hpp baru ke dalam string notes
-                $notes .= (trim($notes) ? ' ' : '') . 'hpp:' . $data['hpp'];
             }
 
             // Siapkan data produk untuk disimpan
             $productData = [
-                'sku'          => $data['sku'],
-                'name'         => $data['name'],
-                'category_id'  => $categoryId,
-                'uom_id'       => $data['uom_id'],
-                'notes'        => $notes, // Gunakan notes yang sudah diformat dengan HPP
-                'material'     => $data['material'] ?? null,
+                'sku'            => $data['sku'],
+                'name'           => $data['name'],
+                'category_id'    => $categoryId,
+                'uom_id'         => $data['uom_id'],
+                'hpp'            => $hppValue,
+                'selling_price'  => !empty($data['selling_price']) ? (float) $data['selling_price'] : null,
+                'notes'          => $notes,
+                'material'       => $data['material'] ?? null,
                 'series'       => $data['series'] ?? null,
                 'pattern_code' => $data['pattern_code'] ?? null,
                 'finish'       => $data['finish'] ?? null,
@@ -118,8 +124,11 @@ class ProductController extends Controller
 
             DB::commit();
 
-            return redirect()->route('products.create')
-                             ->with('success', 'Produk "' . $data['name'] . '" berhasil didaftarkan.');
+            $redirect = request()->routeIs('kasir.products.store')
+                ? redirect()->route('kasir.products.new')
+                : redirect()->route('products.create');
+
+            return $redirect->with('success', 'Produk "' . $data['name'] . '" berhasil didaftarkan.');
 
         } catch (\Exception $e) {
             DB::rollBack();

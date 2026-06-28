@@ -12,6 +12,7 @@ class ChartOfAccountSeeder extends Seeder
         $accounts = [
             // ASET
             ['code' => '1100', 'name' => 'Kas',                'type' => 'ASSET'],
+            ['code' => '1110', 'name' => 'Bank',               'type' => 'ASSET'],
             ['code' => '1200', 'name' => 'Piutang Usaha',      'type' => 'ASSET'],
             ['code' => '1300', 'name' => 'Persediaan Barang',  'type' => 'ASSET'],
 
