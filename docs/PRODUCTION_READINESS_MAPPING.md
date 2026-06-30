@@ -36,6 +36,9 @@ Test harness: MariaDB `final_pvc_test` (skema disalin dari DB asli), feature tes
 
 > ⚠️ **DEPLOY:** jalankan `php artisan migrate` di produksi **sebelum** kode aktif — tanpa kolom `pos_sales.discount`, finalisasi POS akan error. (Sudah ada di `final_pvc_test`.)
 
+**Temuan smoke test → diperbaiki:**
+- ✅ **Klasifikasi non-tunai** — `journalPosSale`/`journalCollectPayment` dulu membukukan **CARD/QR ke Kas (1100)**, padahal bukan tunai → bikin selisih rekonsiliasi (kasus nyata: 1 CARD Rp 811.200). Kini: CASH→Kas(1100), **CARD/QR/TRANSFER→Bank(1110)**, CREDIT→Piutang(1200) via helper `paymentDebitAccountId`. Test: `PosCardPaymentTest`. (Keputusan: hanya perbaikan kode; data historis 811.200 dibiarkan → periode lama masih tampil selisih, transaksi baru sudah benar.)
+
 **SELESAI ronde terakhir:**
 - ✅ **A4** moving-average persediaan — form pembelian kini menangkap **harga beli** (`items.*.price`, field form `unit_price`→`price`), HPP di-update **rata-rata tertimbang** tiap penerimaan. Test: `ProductMovingAverageTest`.
 - ✅ **H2** — unique index `entry_no` **sudah ada** di DB asli (terverifikasi audit); ditambah **retry** di `createEntry` agar tabrakan konkuren tak bikin finalize crash.

@@ -29,3 +29,15 @@ Thumbs.db
 *:Zone.Identifier
 /PENJUALAN*.xlsx
 /QA_CASHIER_PLAN.md
+
+# MCP sidecar: abaikan virtualenv & rahasia, simpan source saja
+/MCP/.env
+/MCP/envbaru/
+/MCP/Include/
+/MCP/Lib/
+/MCP/Scripts/
+/MCP/bin/
+/MCP/share/
+/MCP/__pycache__/
+/MCP/pyvenv.cfg
+**/__pycache__/

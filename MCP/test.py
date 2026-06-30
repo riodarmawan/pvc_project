@@ -10,8 +10,9 @@ PROXIES_LIST = [
     {"http": "http://179.61.251.217:8080", "https": "http://179.61.251.217:8080"},  # Germany
 ]
 
-# Masukkan API key Gemini yang sebenarnya
-GEMINI_API_KEY = "AIzaSyCbKDKi34BVEzSvCx8cNDZBVhQW3I9DARU"  # Ganti dengan API key Anda
+# Ambil dari environment — JANGAN hardcode API key di source.
+# export GEMINI_API_KEY=... atau set di MCP/.env
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 def test_gemini_with_proxy(proxy, api_key):
     """Test Gemini API dengan proxy tertentu"""

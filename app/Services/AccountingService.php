@@ -96,38 +96,43 @@ class AccountingService
      * DR: Kas (1100) / Piutang (1200) — per payment method
      * CR: Penjualan Barang (4100) — total
      */
+    /**
+     * Akun debit penampung dana berdasarkan metode pembayaran.
+     * CASH→Kas(1100), CREDIT→Piutang(1200), CARD/QR/TRANSFER→Bank(1110).
+     */
+    public static function paymentDebitAccountId(string $method): int
+    {
+        return match (strtoupper(trim($method))) {
+            'CASH'   => self::accountId('1100'),
+            'CREDIT' => self::accountId('1200'),
+            default  => self::accountId('1110'),
+        };
+    }
+
     public static function journalPosSale(int $saleId, float $total, $paymentMethod, ?int $customerId, ?int $branchId, array $payments = []): void
     {
-        $kasId      = self::accountId('1100');
-        $piutangId  = self::accountId('1200');
         $penjualanId = self::accountId('4100');
 
         $lines = [];
 
-        // Build DR lines from payments array (split payment support)
+        // DR per metode: CASH→Kas(1100), CARD/QR/TRANSFER→Bank(1110), CREDIT→Piutang(1200)
         if (!empty($payments)) {
             foreach ($payments as $p) {
                 $method = $p['method'] ?? 'CASH';
                 $amount = (float) ($p['amount'] ?? 0);
                 if ($amount <= 0) continue;
 
-                $isCredit = in_array($method, ['TRANSFER', 'CREDIT']) && $customerId;
-                $debitAccountId = $isCredit ? $piutangId : $kasId;
-
                 $lines[] = [
-                    'account_id' => $debitAccountId,
+                    'account_id' => self::paymentDebitAccountId($method),
                     'debit'      => $amount,
                     'credit'     => 0,
                     'memo'       => "Pembayaran {$method}",
                 ];
             }
         } else {
-            // Fallback: single payment method (backward compatibility)
-            $isCredit = in_array($paymentMethod, ['TRANSFER', 'CREDIT']) && $customerId;
-            $debitAccountId = $isCredit ? $piutangId : $kasId;
-
+            // Fallback: metode tunggal
             $lines[] = [
-                'account_id' => $debitAccountId,
+                'account_id' => self::paymentDebitAccountId($paymentMethod ?? 'CASH'),
                 'debit'      => $total,
                 'credit'     => 0,
                 'memo'       => 'Pembayaran dari customer',
@@ -307,8 +312,8 @@ class AccountingService
     {
         if ($amount <= 0) return;
 
-        // TRANSFER masuk ke Bank, selain itu (CASH/CARD/QR) ke Kas.
-        $debitAccountId = $method === 'TRANSFER' ? self::accountId('1110') : self::accountId('1100');
+        // CASH→Kas, CARD/QR/TRANSFER→Bank (konsisten dengan journalPosSale).
+        $debitAccountId = self::paymentDebitAccountId($method);
         $piutangId      = self::accountId('1200');
 
         self::createEntry([
