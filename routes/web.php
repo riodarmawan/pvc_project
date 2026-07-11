@@ -163,6 +163,12 @@ Route::get('/reports/audit-log', [\App\Http\Controllers\AuditLogController::clas
 
 });
 
+/* ========== PRODUK (OWNER ONLY - CRUD) ========== */
+Route::middleware(['auth','role:1'])->group(function () {
+    Route::get('/products/{id}/edit', [\App\Http\Controllers\ProductController::class, 'edit'])->name('products.edit');
+    Route::put('/products/{id}',      [\App\Http\Controllers\ProductController::class, 'update'])->name('products.update');
+});
+
 /* ========== AKUNTANSI (OWNER ONLY) ========== */
 Route::middleware(['auth','role:1'])->prefix('accounting')->name('accounting.')->group(function () {
     Route::get('/chart', [\App\Http\Controllers\AccountController::class, 'index'])->name('chart');
