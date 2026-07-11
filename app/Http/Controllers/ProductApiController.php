@@ -41,8 +41,8 @@ class ProductApiController extends Controller
         $query = DB::table('products as p')
             ->leftJoin('product_categories as c', 'p.category_id', '=', 'c.id')
             ->select(
-                'p.id', 
-                'p.name', 
+                'p.id',
+                'p.name',
                 'c.name as category_name',
                 'p.hpp',
                 'p.selling_price',
@@ -51,7 +51,8 @@ class ProductApiController extends Controller
             ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
                                  FROM stock_quants sq
                                  WHERE sq.product_id = p.id
-                                   AND sq.location_id IN ({$locationIdsString})) as stock"));
+                                   AND sq.location_id IN ({$locationIdsString})) as stock"))
+            ->where('p.is_active', 1);
 
         // Filter tetap berlaku
         $q = trim((string) $request->get('q', ''));

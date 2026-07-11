@@ -46,7 +46,8 @@ class PosController extends Controller
             ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
                                  FROM stock_quants sq
                                  WHERE sq.product_id = p.id
-                                   AND sq.location_id IN ({$locationIdsString})) as stock"));
+                                   AND sq.location_id IN ({$locationIdsString})) as stock"))
+            ->where('p.is_active', 1);
 
         // ===== PERUBAHAN SELESAI =====
 
@@ -113,7 +114,8 @@ class PosController extends Controller
             ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
                                  FROM stock_quants sq
                                  WHERE sq.product_id = p.id
-                                   AND sq.location_id IN ({$locationIdsString})) as stock"));
+                                   AND sq.location_id IN ({$locationIdsString})) as stock"))
+            ->where('p.is_active', 1);
 
         if ($q !== '') {
             $query->where(function ($w) use ($q) {
