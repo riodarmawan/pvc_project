@@ -142,18 +142,19 @@
       <div>
         <button type="button" data-submenu="master"
           class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition
-                 {{ $isParent('admin.*', 'suppliers.*') ? 'text-emerald-700 font-medium' : 'text-slate-600 hover:bg-slate-50' }}">
+                 {{ $isParent('admin.*', 'suppliers.*', 'products.*') ? 'text-emerald-700 font-medium' : 'text-slate-600 hover:bg-slate-50' }}">
           <span class="flex items-center gap-3">
             <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4"/>
             </svg>
             Master Data
           </span>
-          <svg class="h-4 w-4 text-slate-400 transition-transform duration-200 {{ $isParent('admin.*', 'suppliers.*') ? 'rotate-180' : '' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="h-4 w-4 text-slate-400 transition-transform duration-200 {{ $isParent('admin.*', 'suppliers.*', 'products.*') ? 'rotate-180' : '' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
         </button>
-        <div class="ml-3 mt-1 space-y-1 {{ $isParent('admin.*', 'suppliers.*') ? '' : 'hidden' }}" data-submenu-target="master">
+        <div class="ml-3 mt-1 space-y-1 {{ $isParent('admin.*', 'suppliers.*', 'products.*') ? '' : 'hidden' }}" data-submenu-target="master">
+          <a href="{{ route('products.index') }}" class="block px-3 py-2 rounded-lg text-sm {{ $isActive('products.index') }}">Kelola Produk</a>
           <a href="{{ route('suppliers.create') }}" class="block px-3 py-2 rounded-lg text-sm {{ $isActive('suppliers.create') }}">Buat Supplier</a>
           <a href="{{ route('admin.products.import.form') }}" class="block px-3 py-2 rounded-lg text-sm {{ $isActive('admin.products.import.form') }}">Import Data Produk</a>
           <a href="{{ route('admin.branches.create') }}" class="block px-3 py-2 rounded-lg text-sm {{ $isActive('admin.branches.create') }}">Buat Cabang Baru</a>

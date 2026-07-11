@@ -248,4 +248,74 @@ class ProductController extends Controller
             return redirect()->back()->withInput()->with('error', 'Gagal memperbarui produk: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Menampilkan daftar produk untuk owner (search, filter kategori & status).
+     */
+    public function index(Request $request)
+    {
+        $q      = trim((string) $request->get('q', ''));
+        $catId  = $request->get('category_id');
+        $status = $request->get('status', 'all');
+
+        $query = DB::table('products as p')
+            ->leftJoin('product_categories as c', 'p.category_id', '=', 'c.id')
+            ->select('p.id', 'p.sku', 'p.name', 'p.hpp', 'p.selling_price', 'p.is_active', 'c.name as category_name');
+
+        if ($q !== '') {
+            $query->where(function ($w) use ($q) {
+                $w->where('p.sku', 'like', "%{$q}%")
+                  ->orWhere('p.name', 'like', "%{$q}%");
+            });
+        }
+        if (!empty($catId)) {
+            $query->where('p.category_id', (int) $catId);
+        }
+        if ($status === 'active') {
+            $query->where('p.is_active', 1);
+        } elseif ($status === 'inactive') {
+            $query->where('p.is_active', 0);
+        }
+
+        $products = $query->orderBy('p.name')->paginate(20)->withQueryString();
+
+        $categories = DB::table('product_categories')->orderBy('name')->get();
+
+        return view('products.index', [
+            'products'   => $products,
+            'categories' => $categories,
+            'q'          => $q,
+            'catId'      => $catId,
+            'status'     => $status,
+        ]);
+    }
+
+    /**
+     * Aktifkan / nonaktifkan produk. Pengganti hapus asli agar riwayat
+     * transaksi/stok yang mereferensikan produk ini tidak rusak.
+     */
+    public function toggleActive($id)
+    {
+        $product = DB::table('products')->where('id', $id)->first();
+        abort_if(!$product, 404);
+
+        $newStatus = $product->is_active ? 0 : 1;
+        $userId    = (int) Auth::id();
+
+        DB::transaction(function () use ($id, $newStatus, $userId) {
+            DB::table('products')->where('id', $id)->update(['is_active' => $newStatus]);
+
+            DB::table('audit_logs')->insert([
+                'event'      => $newStatus ? 'PRODUCT_ACTIVATED' : 'PRODUCT_DEACTIVATED',
+                'user_id'    => $userId,
+                'ref_type'   => 'PRODUCT',
+                'ref_id'     => $id,
+                'payload'    => json_encode(['is_active' => $newStatus]),
+                'created_at' => now(),
+            ]);
+        });
+
+        $msg = $newStatus ? 'Produk diaktifkan kembali.' : 'Produk dinonaktifkan.';
+        return back()->with('success', $msg);
+    }
 }
