@@ -4,22 +4,20 @@
 <div class="space-y-6">
     <div class="space-y-2">
         <h1 class="text-xl md:text-2xl font-semibold">Edit Produk</h1>
-        <p class="text-slate-600 dark:text-slate-400">Perbarui data produk "{{ $product->name }}".</p>
+        <p class="text-slate-600">Perbarui data produk "{{ $product->name }}".</p>
     </div>
 
     {{-- Notifikasi Sukses dan Error --}}
     @if (session('success'))
         <div role="alert"
-             class="rounded-xl border px-4 py-3 text-sm bg-emerald-50 border-emerald-200 text-emerald-700
-                    dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-200">
+             class="rounded-xl border px-4 py-3 text-sm bg-emerald-50 border-emerald-200 text-emerald-700">
             <p>{{ session('success') }}</p>
         </div>
     @endif
 
     @if (session('error') || $errors->any())
         <div role="alert"
-             class="rounded-xl border px-4 py-3 text-sm bg-rose-50 border-rose-200 text-rose-700
-                    dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-200">
+             class="rounded-xl border px-4 py-3 text-sm bg-rose-50 border-rose-200 text-rose-700">
             <p class="font-semibold">Terjadi Kesalahan</p>
             @if(session('error'))
                 <p class="mt-1">{{ session('error') }}</p>
@@ -42,13 +40,11 @@
         <!-- Tombol Aksi -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <a href="{{ route('products.create') }}"
-               class="inline-flex items-center gap-2 h-10 px-4 rounded-xl border hover:bg-slate-100 border-slate-200
-                      dark:hover:bg-white/5 dark:border-[rgba(148,163,184,.12)]">
+               class="inline-flex items-center gap-2 h-10 px-4 rounded-xl border hover:bg-slate-100 border-slate-200">
                 Batal
             </a>
             <button type="submit" id="btnSubmitProduct"
-                    class="inline-flex items-center gap-2 h-11 px-5 rounded-xl border text-white bg-brand hover:bg-brand/90 border-transparent
-                           dark:bg-brandDark dark:hover:bg-brandDark/90">
+                    class="inline-flex items-center gap-2 h-11 px-5 rounded-xl border text-white bg-brand hover:bg-brand/90 border-transparent">
                 Simpan Perubahan
             </button>
         </div>
