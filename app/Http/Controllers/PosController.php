@@ -614,6 +614,22 @@ private function performFinalize(Request $request)
     /**
      * Retur penjualan: kembalikan stok + jurnal pembalik (revenue & HPP). Full-sale.
      */
+    /**
+     * Baris pos_sale_lines milik $saleId + sisa qty yang masih bisa diretur
+     * (qty terjual dikurangi total qty yang sudah diretur di pos_refund_lines).
+     */
+    private function refundableLines(int $saleId)
+    {
+        return DB::table('pos_sale_lines as l')
+            ->join('products as p', 'p.id', '=', 'l.product_id')
+            ->leftJoin('pos_refund_lines as rl', 'rl.pos_sale_line_id', '=', 'l.id')
+            ->where('l.pos_sale_id', $saleId)
+            ->groupBy('l.id', 'p.sku', 'p.name', 'l.qty', 'l.price', 'l.subtotal', 'l.uom_id', 'l.product_id')
+            ->selectRaw('l.id, p.sku, p.name, l.product_id, l.uom_id, l.qty, l.price, l.subtotal,
+                         (l.qty - COALESCE(SUM(rl.qty), 0)) as refundable')
+            ->get();
+    }
+
     public function refund(Request $request, $id)
     {
         $user     = Auth::user();
@@ -630,7 +646,38 @@ private function performFinalize(Request $request)
         $reason = trim((string) $request->input('reason')) ?: 'Retur penjualan';
         $locId  = $this->availableLocationId($branchId);
 
-        DB::transaction(function () use ($sale, $user, $branchId, $reason, $locId) {
+        $refundableLines = $this->refundableLines($sale->id)->keyBy('id');
+
+        // items[]: [{pos_sale_line_id, qty}]. Kosong/tidak dikirim → retur semua sisa (perilaku lama).
+        $requested = (array) $request->input('items', []);
+        if (empty($requested)) {
+            $requested = $refundableLines->filter(fn ($l) => $l->refundable > 0.0001)
+                ->map(fn ($l) => ['pos_sale_line_id' => $l->id, 'qty' => (float) $l->refundable])
+                ->values()->all();
+        }
+
+        // Validasi dulu semuanya (all-or-nothing) sebelum menyentuh DB.
+        $toRefund = [];
+        foreach ($requested as $item) {
+            $lineId = (int) ($item['pos_sale_line_id'] ?? 0);
+            $qty    = (float) ($item['qty'] ?? 0);
+            if ($qty <= 0) continue; // qty 0 = baris dilewati
+
+            $line = $refundableLines->get($lineId);
+            if (!$line) {
+                return $this->jsonError('Item retur tidak valid.');
+            }
+            if ($qty > $line->refundable + 0.0001) {
+                return $this->jsonError("Qty retur {$line->name} melebihi sisa yang bisa diretur ({$line->refundable}).");
+            }
+            $toRefund[] = ['line' => $line, 'qty' => $qty];
+        }
+
+        if (empty($toRefund)) {
+            return $this->jsonError('Pilih minimal satu item untuk diretur.');
+        }
+
+        DB::transaction(function () use ($sale, $user, $branchId, $reason, $locId, $toRefund) {
             $refundId = (int) DB::table('pos_refunds')->insertGetId([
                 'sale_id'     => $sale->id,
                 'approved_by' => (int) $user->id,
@@ -638,32 +685,50 @@ private function performFinalize(Request $request)
                 'created_at'  => now(),
             ]);
 
-            $totalCost = 0.0;
-            foreach (DB::table('pos_sale_lines')->where('pos_sale_id', $sale->id)->get() as $ln) {
+            $totalRevenue = 0.0;
+            $totalCost    = 0.0;
+
+            foreach ($toRefund as $item) {
+                $ln  = $item['line'];
+                $qty = $item['qty'];
+
+                DB::table('pos_refund_lines')->insert([
+                    'pos_refund_id'    => $refundId,
+                    'pos_sale_line_id' => $ln->id,
+                    'qty'              => $qty,
+                    'created_at'       => now(),
+                ]);
+
                 if ($locId) {
                     $quant = DB::table('stock_quants')
                         ->where('product_id', $ln->product_id)->where('location_id', $locId);
                     if ($quant->exists()) {
-                        $quant->increment('qty', (float) $ln->qty);
+                        $quant->increment('qty', $qty);
                     } else {
                         DB::table('stock_quants')->insert([
-                            'product_id' => $ln->product_id, 'location_id' => $locId, 'qty' => (float) $ln->qty,
+                            'product_id' => $ln->product_id, 'location_id' => $locId, 'qty' => $qty,
                         ]);
                     }
                 }
                 DB::table('stock_moves')->insert([
-                    'product_id'       => $ln->product_id, 'uom_id' => (int) $ln->uom_id, 'qty' => (float) $ln->qty,
+                    'product_id'       => $ln->product_id, 'uom_id' => (int) $ln->uom_id, 'qty' => $qty,
                     'from_location_id' => null, 'to_location_id' => $locId ?: null,
                     'ref_type'         => 'POS', 'ref_id' => $refundId, 'state' => 'DONE',
                     'created_by'       => (int) $user->id, 'created_at' => now(),
                 ]);
+
                 $hpp = (float) DB::table('products')->where('id', $ln->product_id)->value('hpp');
-                $totalCost += $hpp * (float) $ln->qty;
+                $totalCost    += $hpp * $qty;
+                $totalRevenue += (float) $ln->price * $qty;
             }
 
-            DB::table('pos_sales')->where('id', $sale->id)->update(['status' => 'REFUND']);
+            // Sale selesai diretur (status REFUND) hanya kalau tidak ada lagi sisa refundable di baris manapun.
+            $stillRefundable = $this->refundableLines($sale->id)->sum('refundable');
+            if ($stillRefundable <= 0.0001) {
+                DB::table('pos_sales')->where('id', $sale->id)->update(['status' => 'REFUND']);
+            }
 
-            \App\Services\AccountingService::journalPosRefund($refundId, (float) $sale->total, $branchId);
+            \App\Services\AccountingService::journalPosRefund($refundId, $totalRevenue, $branchId);
             \App\Services\AccountingService::journalReturnToInventory($refundId, $totalCost, $branchId);
         });
 
@@ -686,11 +751,10 @@ private function performFinalize(Request $request)
             return redirect()->route('kasir.history')->withErrors('Hanya penjualan berstatus PAID yang dapat diretur.');
         }
 
-        $lines = DB::table('pos_sale_lines as l')
-            ->join('products as p', 'p.id', '=', 'l.product_id')
-            ->where('l.pos_sale_id', $sale->id)
-            ->selectRaw('p.sku, p.name, l.qty, l.price, l.subtotal')
-            ->get();
+        $lines = $this->refundableLines($sale->id)->filter(fn ($l) => $l->refundable > 0.0001)->values();
+        if ($lines->isEmpty()) {
+            return redirect()->route('kasir.history')->withErrors('Tidak ada item tersisa untuk diretur.');
+        }
 
         return view('kasir.refund_confirm', ['sale' => $sale, 'lines' => $lines]);
     }
