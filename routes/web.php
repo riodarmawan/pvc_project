@@ -55,6 +55,9 @@ Route::middleware(['auth','role:3'])->group(function () {
     Route::post('/kasir/payments/add',   [PosController::class,'paymentAdd'])->name('kasir.pay.add');
     Route::post('/kasir/payments/clear', [PosController::class,'paymentClear'])->name('kasir.pay.clear');
 
+    // Diskon per nota (halaman checkout legacy)
+    Route::post('/kasir/discount/set', [PosController::class,'discountSet'])->name('kasir.discount.set');
+
     // Finalize
     Route::post('/kasir/finalize', [PosController::class,'finalize'])->name('kasir.finalize');
 

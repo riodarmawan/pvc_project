@@ -1,9 +1,11 @@
 @php
-  $cart   = $cart ?? [];
-  $total  = (float)($total ?? 0);
-  $paid   = (float)($paid ?? 0);
-  $due    = (float)($due ?? max(0, $total - $paid));
-  $change = $paid > $total ? $paid - $total : 0;
+  $cart     = $cart ?? [];
+  $total    = (float)($total ?? 0);
+  $discount = (float)($discount ?? 0);
+  $netTotal = (float)($netTotal ?? max(0, $total - $discount));
+  $paid     = (float)($paid ?? 0);
+  $due      = (float)($due ?? max(0, $netTotal - $paid));
+  $change   = $paid > $netTotal ? $paid - $netTotal : 0;
   $canFinalize = $due <= 0.0001 && count($cart) > 0;
 @endphp
 
@@ -16,6 +18,31 @@
     <span class="text-slate-500">Subtotal</span>
     <span class="font-semibold text-slate-900 tabular-nums">Rp {{ number_format($total, 0, ',', '.') }}</span>
   </div>
+
+  <div>
+    <label for="discount-input" class="block text-xs text-slate-500 mb-1">Diskon Nota (opsional)</label>
+    <div class="flex gap-1.5">
+      <div class="relative flex-1">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400 text-xs">Rp</span>
+        <input type="number" id="discount-input" min="0" max="{{ $total }}" value="{{ $discount > 0 ? $discount : '' }}"
+               placeholder="0"
+               class="w-full h-9 pl-8 pr-2 rounded-lg border border-slate-200 text-sm tabular-nums focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+      </div>
+      <button type="button" onclick="checkoutSetDiscount()" class="h-9 px-3 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">Terapkan</button>
+    </div>
+  </div>
+
+  @if($discount > 0)
+    <div class="flex justify-between text-sm">
+      <span class="text-slate-500">Diskon</span>
+      <span class="font-medium text-amber-600 tabular-nums">- Rp {{ number_format($discount, 0, ',', '.') }}</span>
+    </div>
+    <div class="flex justify-between text-sm">
+      <span class="text-slate-500">Total setelah diskon</span>
+      <span class="font-semibold text-slate-900 tabular-nums">Rp {{ number_format($netTotal, 0, ',', '.') }}</span>
+    </div>
+  @endif
+
   <div class="flex justify-between text-sm">
     <span class="text-slate-500">Terbayar</span>
     <span class="font-medium text-emerald-600 tabular-nums">Rp {{ number_format($paid, 0, ',', '.') }}</span>

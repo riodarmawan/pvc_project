@@ -75,10 +75,12 @@
     {{-- Summary Panel --}}
     <div id="summary-panel" class="bg-white rounded-xl border border-slate-200 overflow-hidden">
       @include('kasir.partials._summary', [
-        'cart'   => $cart,
-        'total'  => $total,
-        'paid'   => $paid,
-        'due'    => $due,
+        'cart'     => $cart,
+        'total'    => $total,
+        'discount' => $discount,
+        'netTotal' => $netTotal,
+        'paid'     => $paid,
+        'due'      => $due,
       ])
     </div>
   </div>
@@ -102,6 +104,7 @@
     customerSearch:'{{ url("/kasir/checkout") }}',
     paymentAdd:    '{{ route("kasir.pay.add") }}',
     paymentClear:  '{{ route("kasir.pay.clear") }}',
+    discountSet:   '{{ route("kasir.discount.set") }}',
     finalize:      '{{ route("kasir.finalize") }}',
   };
 </script>

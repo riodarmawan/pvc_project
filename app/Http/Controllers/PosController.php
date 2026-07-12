@@ -185,6 +185,11 @@ class PosController extends Controller
 
     [$total, $paid, $due] = $this->totals($cart, $payments);
 
+    // Diskon per nota (session) — konsisten dengan renderCheckoutPartials().
+    $discount = min(max(0.0, $this->sessionDiscount()), $total);
+    $netTotal = round($total - $discount, 2);
+    $due      = max(0.0, round($netTotal - $paid, 2));
+
     // AJAX customer search: return JSON with partial HTML
     if ($request->ajax() && $request->has('cq')) {
         $customerHtml = view('kasir.partials._customer', [
@@ -205,6 +210,8 @@ class PosController extends Controller
         'selectedCustomer' => $this->selectedCustomer($customerId),
         'customerResults'  => $customerResults,
         'total'            => $total,
+        'discount'         => $discount,
+        'netTotal'         => $netTotal,
         'paid'             => $paid,
         'due'              => $due,
         'title'            => 'Checkout',
@@ -325,7 +332,7 @@ return $this->respond($request, [
 
     public function cartClear()
     {
-        session()->forget('pos.cart');
+        session()->forget(['pos.cart', 'pos.discount']);
         return $this->jsonOk('Keranjang dikosongkan.', $this->renderCheckoutPartials([]));
     }
 
@@ -591,7 +598,7 @@ private function performFinalize(Request $request)
     });
 
     // Bersihkan session
-    session()->forget(['pos.cart','pos.payments','pos.customer_id']);
+    session()->forget(['pos.cart','pos.payments','pos.customer_id','pos.discount']);
 
     // Siapkan invoice HTML yang menampilkan kembalian
     $invoiceHtml = $this->renderInvoiceHtml($saleId);
@@ -746,6 +753,11 @@ private function availableStock(int $productId, int $branchId): int
         return (array) session('pos.payments', []);
     }
 
+    private function sessionDiscount(): float
+    {
+        return (float) session('pos.discount', 0);
+    }
+
     /** hitung total, paid, due */
     private function totals(array $cart = null, array $payments = null): array
     {
@@ -775,6 +787,11 @@ private function renderCheckoutPartials(array $cart = null): array
 
     [$total, $paid, $due] = $this->totals($cart, $payments);
 
+    // Diskon per nota (session, dibaca ulang di finalize dari body request — lihat performFinalize).
+    $discount = min(max(0.0, $this->sessionDiscount()), $total);
+    $netTotal = round($total - $discount, 2);
+    $due      = max(0.0, round($netTotal - $paid, 2));
+
     return [
         'cart' => view('kasir.partials._cart', [
             'cart' => array_values($cart),
@@ -791,12 +808,29 @@ private function renderCheckoutPartials(array $cart = null): array
         ])->render(),
 
         'summary' => view('kasir.partials._summary', [
-            'cart'  => array_values($cart),
-            'total' => $total,
-            'paid'  => $paid,
-            'due'   => $due,
+            'cart'     => array_values($cart),
+            'total'    => $total,
+            'discount' => $discount,
+            'netTotal' => $netTotal,
+            'paid'     => $paid,
+            'due'      => $due,
         ])->render(),
     ];
+}
+
+/**
+ * Set diskon per nota (checkout legacy). Disimpan di session agar bertahan
+ * lintas refresh AJAX cart/pembayaran, sama seperti pola cart/payments/customer.
+ */
+public function discountSet(Request $request)
+{
+    $cart     = $this->sessionCart();
+    [$total]  = $this->totals($cart, $this->sessionPayments());
+    $discount = min(max(0.0, (float) $request->input('discount', 0)), $total);
+
+    session(['pos.discount' => $discount]);
+
+    return $this->jsonOk('Diskon diterapkan.', $this->renderCheckoutPartials($cart));
 }
 
 

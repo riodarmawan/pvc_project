@@ -262,6 +262,21 @@ function checkoutAddPayment() {
     .catch(() => toast('Gagal menghubungi server', 'error'));
 }
 
+function checkoutSetDiscount() {
+  const amount = parseFloat(document.getElementById('discount-input')?.value) || 0;
+
+  postJSON(ROUTES.discountSet, { discount: amount })
+    .then(res => {
+      if (res.ok) {
+        toast('Diskon diterapkan');
+        refreshCheckoutPanels(res.html);
+      } else {
+        toast(res.message || 'Gagal menerapkan diskon', 'error');
+      }
+    })
+    .catch(() => toast('Gagal menghubungi server', 'error'));
+}
+
 function checkoutClearPayments() {
   postJSON(ROUTES.paymentClear, {})
     .then(res => {
@@ -285,7 +300,9 @@ function checkoutFinalize() {
   disableBtn(btn, true);
   btn.innerHTML = '<svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Memproses...';
 
-  postJSON(ROUTES.finalize, {})
+  const discount = parseFloat(document.getElementById('discount-input')?.value) || 0;
+
+  postJSON(ROUTES.finalize, { discount })
     .then(res => {
       if (res.ok) {
         toast('Transaksi berhasil!', 'success');

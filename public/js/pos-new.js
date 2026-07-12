@@ -251,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================================
 let selectedMethod = 'CASH';
 let payments = [];
+let discount = 0;
 
 function openPaymentModal() {
   const items = document.querySelectorAll('#cart-items [data-product-id]');
@@ -258,6 +259,7 @@ function openPaymentModal() {
 
   const total = parseTotal();
   payments = [];
+  discount = 0;
   selectedMethod = 'CASH';
   renderPaymentModal(total, 0);
   document.getElementById('payment-modal').classList.remove('hidden');
@@ -274,8 +276,9 @@ function parseTotal() {
 }
 
 function renderPaymentModal(total, paid) {
-  const due = Math.max(0, total - paid);
-  const change = Math.max(0, paid - total);
+  const net = Math.max(0, total - discount);
+  const due = Math.max(0, net - paid);
+  const change = Math.max(0, paid - net);
 
   const methods = ['CASH', 'CARD', 'QR', 'TRANSFER'];
   const methodLabels = { CASH: 'Tunai', CARD: 'Kartu', QR: 'QRIS', TRANSFER: 'Transfer' };
@@ -290,6 +293,16 @@ function renderPaymentModal(total, paid) {
     <div class="mb-6">
       <p class="text-sm text-slate-500 mb-1">Total Belanja</p>
       <p class="text-3xl font-bold text-slate-900 tabular-nums">Rp ${fmt(total)}</p>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-slate-700 mb-1">Diskon Nota (opsional)</label>
+      <div class="relative">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 text-sm font-medium">Rp</span>
+        <input type="number" id="discount-amount" value="${discount || ''}" min="0" max="${total}" placeholder="0"
+               class="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-base font-semibold tabular-nums"
+               onchange="updateDiscount()">
+      </div>
     </div>
 
     <div class="mb-4">
@@ -309,16 +322,16 @@ function renderPaymentModal(total, paid) {
       <label class="block text-sm font-medium text-slate-700 mb-1">Jumlah Bayar</label>
       <div class="relative">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 text-sm font-medium">Rp</span>
-        <input type="number" id="pay-amount" value="${due || total}" min="0"
+        <input type="number" id="pay-amount" value="${due || net}" min="0"
                class="w-full h-12 pl-10 pr-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-xl font-bold tabular-nums"
                oninput="updatePaymentPreview()">
       </div>
     </div>
 
     <div class="flex gap-2 mb-4">
-      <button onclick="quickAmount(${due || total})" class="flex-1 h-10 rounded-lg border border-slate-200 text-sm font-medium hover:bg-slate-50 transition">Uang Pas</button>
-      <button onclick="quickAmount(${Math.ceil((due || total) / 50000) * 50000})" class="flex-1 h-10 rounded-lg border border-slate-200 text-sm font-medium hover:bg-slate-50 transition">+50rb</button>
-      <button onclick="quickAmount(${Math.ceil((due || total) / 100000) * 100000})" class="flex-1 h-10 rounded-lg border border-slate-200 text-sm font-medium hover:bg-slate-50 transition">+100rb</button>
+      <button onclick="quickAmount(${due || net})" class="flex-1 h-10 rounded-lg border border-slate-200 text-sm font-medium hover:bg-slate-50 transition">Uang Pas</button>
+      <button onclick="quickAmount(${Math.ceil((due || net) / 50000) * 50000})" class="flex-1 h-10 rounded-lg border border-slate-200 text-sm font-medium hover:bg-slate-50 transition">+50rb</button>
+      <button onclick="quickAmount(${Math.ceil((due || net) / 100000) * 100000})" class="flex-1 h-10 rounded-lg border border-slate-200 text-sm font-medium hover:bg-slate-50 transition">+100rb</button>
     </div>
 
     ${payments.length > 0 ? `
@@ -334,7 +347,9 @@ function renderPaymentModal(total, paid) {
     ` : ''}
 
     <div class="bg-slate-50 rounded-xl p-4 mb-4 space-y-1.5 text-sm">
-      <div class="flex justify-between"><span class="text-slate-500">Total</span><span class="font-medium tabular-nums">Rp ${fmt(total)}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Subtotal</span><span class="font-medium tabular-nums">Rp ${fmt(total)}</span></div>
+      ${discount > 0 ? `<div class="flex justify-between"><span class="text-slate-500">Diskon</span><span class="font-medium text-amber-600 tabular-nums">- Rp ${fmt(discount)}</span></div>` : ''}
+      <div class="flex justify-between"><span class="text-slate-500">Total setelah diskon</span><span class="font-semibold tabular-nums">Rp ${fmt(net)}</span></div>
       <div class="flex justify-between"><span class="text-slate-500">Dibayar</span><span class="font-medium text-emerald-600 tabular-nums">Rp ${fmt(paid)}</span></div>
       <div class="flex justify-between"><span class="text-slate-500">Sisa</span><span class="font-bold ${due > 0 ? 'text-red-600' : 'text-emerald-600'} tabular-nums">Rp ${fmt(due)}</span></div>
       ${change > 0 ? `<div class="flex justify-between pt-1 border-t border-slate-200"><span class="text-slate-500">Kembalian</span><span class="font-bold text-emerald-600 tabular-nums">Rp ${fmt(change)}</span></div>` : ''}
@@ -389,6 +404,14 @@ function updatePaymentPreview() {
   }
 }
 
+function updateDiscount() {
+  const total = parseTotal();
+  const paid = payments.reduce((s, p) => s + p.amount, 0);
+  const raw = parseFloat(document.getElementById('discount-amount')?.value) || 0;
+  discount = Math.max(0, Math.min(raw, total));
+  renderPaymentModal(total, paid);
+}
+
 function addPayment() {
   const total = parseTotal();
   const currentPaid = payments.reduce((s, p) => s + p.amount, 0);
@@ -434,7 +457,7 @@ function processPayment() {
   disableBtn(btn, true);
   btn.innerHTML = '<svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Memproses...';
 
-  postJSON(ROUTES.finalize, {})
+  postJSON(ROUTES.finalize, { discount })
     .then(res => {
       if (res.ok) {
         closePaymentModal();
