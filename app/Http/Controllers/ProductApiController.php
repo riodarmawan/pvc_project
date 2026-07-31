@@ -31,11 +31,13 @@ class ProductApiController extends Controller
             return response()->json(['error' => 'Cabang yang dipilih tidak ditemukan.'], 404);
         }
 
+        // Lokasi jual (AVAILABLE) saja — stok di STORE belum bisa dijual sampai ditransfer.
         $branchLocationIds = DB::table('stock_locations')
                                 ->where('branch_id', $branchId)
+                                ->where('type', 'AVAILABLE')
                                 ->pluck('id')
                                 ->all();
-        
+
         $locationIdsString = !empty($branchLocationIds) ? implode(',', $branchLocationIds) : '-1';
 
         $query = DB::table('products as p')

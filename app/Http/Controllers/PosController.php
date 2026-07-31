@@ -29,20 +29,23 @@ class PosController extends Controller
 
         // ===== PERUBAHAN DIMULAI DI SINI =====
 
-        // 1. Ambil SEMUA ID lokasi yang dimiliki oleh cabang saat ini.
+        // 1. Ambil ID lokasi bertipe AVAILABLE (lokasi jual) milik cabang ini.
+        //    Stok di lokasi STORE belum bisa dijual sampai ditransfer ke AVAILABLE.
         $branchLocationIds = DB::table('stock_locations')
                                 ->where('branch_id', $branchId)
+                                ->where('type', 'AVAILABLE')
                                 ->pluck('id')
                                 ->all();
-        
+
         // Konversi array menjadi string agar bisa dimasukkan ke query SQL, contoh: "45,48"
         // Jika tidak ada lokasi sama sekali, gunakan angka mustahil (-1) agar query tidak error.
         $locationIdsString = !empty($branchLocationIds) ? implode(',', $branchLocationIds) : '-1';
 
-        // ambil produk + harga jual + stok TOTAL di cabang
+        // ambil produk + harga jual + stok di lokasi jual (AVAILABLE)
         $query = DB::table('products as p')
             ->selectRaw('p.id, p.sku, p.name, p.category_id, p.uom_id, p.hpp, p.selling_price, p.notes')
-            // 2. Ubah subquery untuk menjumlahkan stok dari SEMUA lokasi di cabang tersebut.
+            // 2. Jumlahkan stok dari lokasi AVAILABLE saja — harus konsisten dengan
+            //    lokasi yang benar-benar dikurangi saat finalize (lihat availableStock()).
             ->addSelect(DB::raw("(SELECT IFNULL(SUM(sq.qty),0)
                                  FROM stock_quants sq
                                  WHERE sq.product_id = p.id
@@ -102,9 +105,11 @@ class PosController extends Controller
         $q     = trim((string) $request->get('q', ''));
         $catId = $request->get('cat_id');
 
-        // Location IDs for this branch
+        // Lokasi jual (AVAILABLE) untuk cabang ini — bukan semua lokasi, karena stok di
+        // STORE belum bisa dijual sampai ditransfer (lihat availableStock()).
         $branchLocationIds = DB::table('stock_locations')
             ->where('branch_id', $branchId)
+            ->where('type', 'AVAILABLE')
             ->pluck('id')
             ->all();
         $locationIdsString = !empty($branchLocationIds) ? implode(',', $branchLocationIds) : '-1';
@@ -783,24 +788,25 @@ private function performFinalize(Request $request)
     }
 
 /**
- * [DIPERBARUI] Menghitung total stok suatu produk di SEMUA lokasi dalam satu cabang.
+ * Menghitung stok suatu produk yang benar-benar bisa dijual di cabang ini:
+ * cuma lokasi bertipe AVAILABLE, sama seperti lokasi yang dikurangi saat
+ * finalize (lihat performFinalize). Stok di lokasi STORE tidak dihitung
+ * karena belum ditransfer ke AVAILABLE dan tidak bisa langsung dijual.
  */
 private function availableStock(int $productId, int $branchId): int
 {
-    // 1. Ambil SEMUA ID lokasi yang dimiliki oleh cabang ini.
     $locationIds = DB::table('stock_locations')
                        ->where('branch_id', $branchId)
+                       ->where('type', 'AVAILABLE')
                        ->pluck('id');
 
-    // Jika cabang tidak punya lokasi sama sekali, stok pasti 0.
     if ($locationIds->isEmpty()) {
         return 0;
     }
 
-    // 2. Jumlahkan (SUM) kuantitas produk dari semua lokasi tersebut.
     $totalQty = DB::table('stock_quants')
         ->where('product_id', $productId)
-        ->whereIn('location_id', $locationIds) // <-- Gunakan whereIn untuk mencari di banyak lokasi
+        ->whereIn('location_id', $locationIds)
         ->sum('qty');
 
     return (int) floor((float) ($totalQty ?? 0));
