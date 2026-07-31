@@ -187,12 +187,39 @@ class AccountingService
      * Jurnal otomatis saat POS Refund
      *
      * DR: Retur Penjualan (4900)
-     * CR: Kas (1100)
+     * CR: akun sesuai metode pembayaran asli — CASH→Kas(1100), CARD/QR/TRANSFER→Bank(1110),
+     *     CREDIT→Piutang(1200). Tanpa $payments, fallback ke Kas (nota lama/tanpa pembayaran).
+     *
+     * @param array $payments [['method' => 'CASH', 'amount' => 1000], ...] — totalnya
+     *                        harus sama dengan $amount agar jurnal seimbang.
      */
-    public static function journalPosRefund(int $refundId, float $amount, ?int $branchId): void
+    public static function journalPosRefund(int $refundId, float $amount, ?int $branchId, array $payments = []): void
     {
-        $returId = self::accountId('4900');
-        $kasId   = self::accountId('1100');
+        $lines = [
+            ['account_id' => self::accountId('4900'), 'debit' => $amount, 'credit' => 0, 'memo' => 'Retur penjualan'],
+        ];
+
+        if (!empty($payments)) {
+            foreach ($payments as $p) {
+                $method = $p['method'] ?? 'CASH';
+                $amt    = (float) ($p['amount'] ?? 0);
+                if ($amt <= 0) continue;
+
+                $lines[] = [
+                    'account_id' => self::paymentDebitAccountId($method),
+                    'debit'      => 0,
+                    'credit'     => $amt,
+                    'memo'       => "Pengembalian {$method}",
+                ];
+            }
+        } else {
+            $lines[] = [
+                'account_id' => self::accountId('1100'),
+                'debit'      => 0,
+                'credit'     => $amount,
+                'memo'       => 'Pengembalian kas',
+            ];
+        }
 
         self::createEntry([
             'date'        => now()->format('Y-m-d'),
@@ -200,10 +227,7 @@ class AccountingService
             'source_type' => 'POS_REFUND',
             'source_id'   => $refundId,
             'branch_id'   => $branchId,
-            'lines'       => [
-                ['account_id' => $returId, 'debit' => $amount, 'credit' => 0, 'memo' => 'Retur penjualan'],
-                ['account_id' => $kasId,   'debit' => 0, 'credit' => $amount, 'memo' => 'Pengembalian kas'],
-            ],
+            'lines'       => $lines,
         ]);
     }
 

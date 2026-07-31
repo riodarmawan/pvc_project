@@ -69,7 +69,7 @@ class StockAdjustmentController extends Controller
         $productId = (int) $data['product_id'];
         $newQty    = (float) $data['new_qty'];
         $reason    = trim($data['reason'] ?? 'Penyesuaian stok');
-        $locationId = $this->ensureStoreLocationId($branchId);
+        $locationId = $this->ensureAvailableLocationId($branchId);
 
         // Ambil HPP produk
         $product = DB::table('products')->where('id', $productId)->first();
@@ -82,18 +82,20 @@ class StockAdjustmentController extends Controller
             }
         }
 
-        // Hitung delta dan nilai
-        $oldQty = (float) (DB::table(self::TBL_QUANTS)
-            ->where('product_id', $productId)
-            ->where('location_id', $locationId)
-            ->value('qty') ?? 0.0);
-
-        $delta     = $newQty - $oldQty;
-        $deltaVal  = round(abs($delta) * $hpp, 2);
-
         DB::beginTransaction();
 
         try {
+            // Baca stok lama DI DALAM transaksi + kunci barisnya, supaya penjualan POS
+            // yang berjalan bersamaan tidak tertimpa (lost update) oleh penyesuaian ini.
+            $oldQty = (float) (DB::table(self::TBL_QUANTS)
+                ->where('product_id', $productId)
+                ->where('location_id', $locationId)
+                ->lockForUpdate()
+                ->value('qty') ?? 0.0);
+
+            $delta     = $newQty - $oldQty;
+            $deltaVal  = round(abs($delta) * $hpp, 2);
+
             // 1. Update stock_quants
             DB::table(self::TBL_QUANTS)->updateOrInsert(
                 ['product_id' => $productId, 'location_id' => $locationId],
@@ -184,25 +186,30 @@ class StockAdjustmentController extends Controller
     }
 
     /**
-     * Memastikan lokasi STORE untuk cabang ada dan mengembalikannya.
+     * Memastikan lokasi AVAILABLE (lokasi jual) untuk cabang ada dan mengembalikannya.
+     *
+     * Penyesuaian stok HARUS menyasar lokasi yang sama dengan yang dijual POS
+     * (lihat PosController::availableStock/performFinalize). Sebelumnya method ini
+     * memakai lokasi STORE sehingga hasil opname tidak pernah mengoreksi stok yang
+     * benar-benar dijual, dan malah membuat saldo bayangan di gudang.
      */
-    private function ensureStoreLocationId(int $branchId): int
+    private function ensureAvailableLocationId(int $branchId): int
     {
         $loc = DB::table('stock_locations')
             ->where('branch_id', $branchId)
             ->where(function ($q) {
-                $q->where('type', 'STORE')->orWhere('code', 'STORE');
+                $q->where('type', 'AVAILABLE')->orWhere('code', 'AVAILABLE');
             })->first();
 
         if ($loc) {
             return (int) $loc->id;
         }
-        
+
         return (int) DB::table('stock_locations')->insertGetId([
             'branch_id' => $branchId,
-            'code'      => 'STORE',
-            'name'      => 'Gudang Utama',
-            'type'      => 'STORE',
+            'code'      => 'AVAILABLE',
+            'name'      => 'Stok Tersedia',
+            'type'      => 'AVAILABLE',
         ]);
     }
 

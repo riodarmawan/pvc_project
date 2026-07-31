@@ -635,6 +635,55 @@ private function performFinalize(Request $request)
             ->get();
     }
 
+    /**
+     * Rasio netto/bruto sebuah nota (1.0 bila tanpa diskon). Dipakai untuk mem-prorata
+     * diskon nota ke nilai retur, karena pos_sale_lines.price menyimpan harga BRUTO
+     * sementara pendapatan diakui netto setelah diskon.
+     */
+    private function saleNetRatio(object $sale): float
+    {
+        $net   = (float) $sale->total;
+        $gross = $net + (float) ($sale->discount ?? 0);
+
+        return $gross > 0 ? $net / $gross : 1.0;
+    }
+
+    /**
+     * Bagi nilai retur ke metode pembayaran asli nota, proporsional terhadap nominal
+     * tiap pembayaran. Supaya uang dikembalikan lewat akun yang dulu menerimanya
+     * (CASH→Kas, CARD/QR/TRANSFER→Bank, CREDIT→Piutang), bukan selalu Kas.
+     * Mengembalikan array kosong bila nota tak punya pembayaran tercatat — pemanggil
+     * akan jatuh ke perilaku lama (Kas).
+     */
+    private function refundPaymentAllocation(int $saleId, float $refundValue): array
+    {
+        $pays      = DB::table('pos_payments')->where('pos_sale_id', $saleId)->get()->values();
+        $totalPaid = (float) $pays->sum('amount');
+
+        if ($pays->isEmpty() || $totalPaid <= 0 || $refundValue <= 0) {
+            return [];
+        }
+
+        $alloc    = [];
+        $assigned = 0.0;
+        $last     = $pays->count() - 1;
+
+        foreach ($pays as $i => $p) {
+            // Pembayaran terakhir menyerap sisa pembulatan agar total alokasi persis
+            // sama dengan nilai retur (jurnal wajib seimbang).
+            $amount = $i === $last
+                ? round($refundValue - $assigned, 2)
+                : round($refundValue * ((float) $p->amount / $totalPaid), 2);
+
+            $assigned = round($assigned + $amount, 2);
+            if ($amount > 0) {
+                $alloc[] = ['method' => $p->method, 'amount' => $amount];
+            }
+        }
+
+        return $alloc;
+    }
+
     public function refund(Request $request, $id)
     {
         $user     = Auth::user();
@@ -690,7 +739,7 @@ private function performFinalize(Request $request)
                 'created_at'  => now(),
             ]);
 
-            $totalRevenue = 0.0;
+            $grossRevenue = 0.0;   // nilai bruto item yang diretur (harga baris x qty)
             $totalCost    = 0.0;
 
             foreach ($toRefund as $item) {
@@ -724,7 +773,7 @@ private function performFinalize(Request $request)
 
                 $hpp = (float) DB::table('products')->where('id', $ln->product_id)->value('hpp');
                 $totalCost    += $hpp * $qty;
-                $totalRevenue += (float) $ln->price * $qty;
+                $grossRevenue += (float) $ln->price * $qty;
             }
 
             // Sale selesai diretur (status REFUND) hanya kalau tidak ada lagi sisa refundable di baris manapun.
@@ -733,7 +782,14 @@ private function performFinalize(Request $request)
                 DB::table('pos_sales')->where('id', $sale->id)->update(['status' => 'REFUND']);
             }
 
-            \App\Services\AccountingService::journalPosRefund($refundId, $totalRevenue, $branchId);
+            // Diskon nota disimpan di header (pos_sale_lines.price tetap harga bruto), jadi
+            // pendapatan yang dulu diakui adalah netto. Prorata diskon ke item yang diretur
+            // supaya nilai retur tidak melebihi yang pernah diakui/diterima.
+            $refundValue = round($grossRevenue * $this->saleNetRatio($sale), 2);
+
+            \App\Services\AccountingService::journalPosRefund(
+                $refundId, $refundValue, $branchId, $this->refundPaymentAllocation($sale->id, $refundValue)
+            );
             \App\Services\AccountingService::journalReturnToInventory($refundId, $totalCost, $branchId);
         });
 

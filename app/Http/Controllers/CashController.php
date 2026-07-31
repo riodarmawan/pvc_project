@@ -105,12 +105,25 @@ class CashController extends Controller
 
         $branchId = $this->branchId();
 
-        DB::transaction(function () use ($r, $branchId) {
+        // Untuk transfer bank, arah kas ditentukan KATEGORINYA, bukan pilihan user:
+        // SETOR_BANK selalu mengurangi kas (OUT), TARIK_BANK selalu menambah kas (IN).
+        // Jurnal di bawah memang sudah begitu (cabang IN & OUT identik untuk 2 kategori
+        // ini), tapi cash_movements.direction dulu disimpan mentah dari dropdown — kalau
+        // user salah pilih arah, saldo kas & laporan Rekonsiliasi Kas ikut melenceng
+        // padahal GL-nya benar. Samakan di sini supaya keduanya konsisten.
+        // OPENING & LAINNYA tetap menghormati pilihan user (arahnya memang bermakna).
+        $direction = match ($r->input('category')) {
+            'SETOR_BANK' => 'OUT',
+            'TARIK_BANK' => 'IN',
+            default      => $r->input('direction'),
+        };
+
+        DB::transaction(function () use ($r, $branchId, $direction) {
 
         DB::table('cash_movements')->insert([
             'branch_id' => $branchId,
             'user_id'   => (int) (Auth::id() ?? 0),
-            'direction' => $r->input('direction'),
+            'direction' => $direction,
             'category'  => $r->input('category'),
             'amount'    => round((float)$r->input('amount'), 2),
             'memo'      => trim((string)$r->input('memo', '')),
@@ -118,7 +131,6 @@ class CashController extends Controller
         ]);
 
         // === AKUNTANSI: Jurnal penyesuaian kas (per kategori) ===
-        $direction = $r->input('direction');
         $amount    = (float) $r->input('amount');
         $category  = $r->input('category');
         $memo      = trim((string)$r->input('memo', ''));

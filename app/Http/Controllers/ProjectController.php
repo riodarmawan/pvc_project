@@ -329,10 +329,14 @@ $availableLeftovers = DB::table('leftover_pieces as lp')
     ->where(function($q){ $q->whereNull('lp.reserved_project_id'); })
     ->where('lp.branch_id',$branchId)
     ->where('lp.condition', 'GOOD') // <-- PERUBAHAN DI SINI
+    // Sembunyikan potongan yang sisanya sudah habis terpakai proyek lain.
+    ->whereRaw(self::SQL_SISA_POTONGAN.' > 0.0001')
     ->when(!empty($inCartPieceIds), function ($query) use ($inCartPieceIds) {
         return $query->whereNotIn('lp.id', $inCartPieceIds);
     })
-    ->select('lp.*','p.name as product_name','p.sku')
+    // length_m di-override jadi SISA panjang, bukan panjang awal — itu yang boleh dipakai.
+    ->select('lp.id','lp.product_id','lp.branch_id','lp.condition','p.name as product_name','p.sku')
+    ->selectRaw(self::SQL_SISA_POTONGAN.' as length_m')
     ->orderByDesc('lp.id')
     ->limit(100)->get();
 
@@ -812,8 +816,15 @@ public function cartAdd(Request $req)
         if (!is_null($piece->reserved_project_id) && (int)$piece->reserved_project_id !== 0) {
             return back()->withErrors('Potongan sisa sedang di-reserve project lain.');
         }
-        if ((float)$v['used_length_m'] - (float)$piece->length_m > 0.0001) {
-            return back()->withErrors('Panjang pakai melebihi panjang potongan.');
+
+        // Batasnya SISA panjang, bukan panjang awal — potongan bisa saja sudah dipakai
+        // sebagian oleh proyek lain.
+        $sisaM = $this->sisaPotonganM((int) $piece->id);
+        if ($sisaM <= 0.0001) {
+            return back()->withErrors('Potongan sisa sudah habis terpakai.');
+        }
+        if ((float)$v['used_length_m'] - $sisaM > 0.0001) {
+            return back()->withErrors("Panjang pakai melebihi sisa potongan ({$sisaM} m).");
         }
 
         $cart['leftovers'][] = [
@@ -821,7 +832,7 @@ public function cartAdd(Request $req)
             'piece_id'      => (int) $piece->id,
             'product_id'    => (int) $piece->product_id,
             'name'          => (string) $piece->product_name,
-            'available_m'   => (float) $piece->length_m,
+            'available_m'   => $sisaM,
             'used_length_m' => (float) $v['used_length_m'],
             'price_m'       => isset($v['price']) ? (float)$v['price'] : 0.0,  // ikut ke ringkasan & invoice
         ];
@@ -892,9 +903,13 @@ if ($kind === 'leftover') {
 
     foreach ($cart['leftovers'] as &$r) {
         if ($r['row_id'] === $v['row_id']) {
-            if ($v['used_length_m'] > (float)($r['available_m'] ?? 0) + 0.0001) {
-                return back()->withErrors('Panjang pakai melebihi sisa tersedia.');
+            // Pakai sisa terkini, bukan snapshot saat item masuk cart (proyek lain
+            // bisa sudah memakai sebagiannya). Konsumsi baru terjadi saat finalize.
+            $sisaM = $this->sisaPotonganM((int)($r['piece_id'] ?? 0));
+            if ($v['used_length_m'] > $sisaM + 0.0001) {
+                return back()->withErrors("Panjang pakai melebihi sisa tersedia ({$sisaM} m).");
             }
+            $r['available_m'] = $sisaM;
 
             $r['used_length_m'] = (float)$v['used_length_m'];
 
@@ -1250,7 +1265,6 @@ private function performFinalize(Request $req)
         foreach ($useLeftovers as $r) {
             $pieceId = (int) ($r['piece_id'] ?? 0);
             $used    = (float) $r['used_length_m'];
-            $avail   = (float) ($r['available_m'] ?? 0);
             if ($pieceId <= 0 || $used <= 0) continue;
 
             $piece = DB::table('leftover_pieces')->where('id', $pieceId)->lockForUpdate()->first();
@@ -1260,8 +1274,12 @@ private function performFinalize(Request $req)
                 abort(422, 'Potongan sisa sedang di-reserve proyek lain.');
             }
 
-            $lenPiece = $avail > 0 ? (float)$avail : (float)$piece->length_m;
-            if ($used - $lenPiece > 0.0001) abort(422, 'Panjang pakai melebihi panjang potongan.');
+            // Hitung ulang sisa di dalam lock. available_m di session cuma snapshot saat
+            // item dimasukkan ke cart — proyek lain bisa sudah memakai sebagiannya sejak itu.
+            $lenPiece = $this->sisaPotonganM($pieceId);
+            if ($used - $lenPiece > 0.0001) {
+                abort(422, "Panjang pakai melebihi sisa potongan ({$lenPiece} m).");
+            }
 
             // catat konsumsi parsial / total
             DB::table('leftover_piece_consumptions')->insert([
@@ -1593,6 +1611,26 @@ public function returnProcess(Request $req, $id)
     /* =======================
      | Leftover datalist (JSON sederhana)
      |=======================*/
+    /**
+     * Ekspresi SQL sisa panjang potongan (butuh alias tabel `lp`).
+     *
+     * Pemakaian SEBAGIAN tidak mengubah leftover_pieces.length_m — historinya cuma
+     * dicatat di leftover_piece_consumptions. Jadi sisa yang boleh dipakai WAJIB
+     * dihitung ulang, bukan dibaca mentah dari length_m; kalau tidak, potongan yang
+     * sudah terpakai separuh masih ditawarkan utuh ke proyek berikutnya.
+     */
+    private const SQL_SISA_POTONGAN =
+        '(lp.length_m - COALESCE((SELECT SUM(c.used_m) FROM leftover_piece_consumptions c WHERE c.piece_id = lp.id), 0))';
+
+    /** Sisa panjang sebuah potongan dalam meter. */
+    private function sisaPotonganM(int $pieceId): float
+    {
+        $lengthM = (float) DB::table('leftover_pieces')->where('id', $pieceId)->value('length_m');
+        $used    = (float) DB::table('leftover_piece_consumptions')->where('piece_id', $pieceId)->sum('used_m');
+
+        return round($lengthM - $used, 4);
+    }
+
     public function leftoverList(Request $req)
     {
         $branchId = $this->branchId();
@@ -1601,7 +1639,9 @@ public function returnProcess(Request $req, $id)
             ->where('lp.branch_id',$branchId)
             ->whereNull('lp.consumed_at')
             ->where(function($s){ $s->whereNull('lp.reserved_project_id'); })
-            ->select('lp.id','lp.product_id','p.name','p.sku','lp.length_m','lp.condition')
+            ->whereRaw(self::SQL_SISA_POTONGAN.' > 0.0001')
+            ->select('lp.id','lp.product_id','p.name','p.sku','lp.condition')
+            ->selectRaw(self::SQL_SISA_POTONGAN.' as length_m')
             ->orderByDesc('lp.id')
             ->limit(100);
 
