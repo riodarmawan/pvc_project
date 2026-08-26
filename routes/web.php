@@ -115,6 +115,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/projects/{project}/print-sj',        [ProjectController::class,'printSj'])
         ->name('projects.print.sj');
 
+    // Cetak Nota Retur (credit note). Ditaruh di grup auth — bukan role:3 — supaya
+    // owner juga bisa mencetaknya, mengikuti pola route cetak lain di grup ini.
+    Route::get('/kasir/refunds/{id}/print', [SalesHistoryController::class, 'refundNote'])
+        ->name('kasir.refund.print');
+
     // Cetak invoice berbasis PROJECT (auto-cari sale dari project)
     Route::get('/projects/{project}/print-invoice',   [ProjectController::class,'printInvoiceByProject'])
         ->name('projects.print.invoice.byproject');

@@ -112,6 +112,7 @@
     const s = payload.sale;
     const lines = payload.lines || [];
     const pays = payload.payments || [];
+    const refunds = payload.refunds || [];
 
     let html = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">`;
     html += `<div class="p-3 rounded-lg bg-white border border-slate-200">
@@ -152,6 +153,31 @@
         ${s.status === 'PAID' ? `<a href="/kasir/history/${s.id}/refund/confirm" class="inline-flex items-center px-3 py-1.5 mt-2 rounded-lg text-xs font-medium text-white bg-red-600 hover:bg-red-700 transition">Retur</a>` : ''}
       </div>
     </div>`;
+
+    // Riwayat retur. Nilai nota di atas sengaja TIDAK dikurangi — invoice adalah
+    // dokumen sejarah; retur punya dokumennya sendiri (Nota Retur) yang dirujuk di sini.
+    if (refunds.length) {
+      const totalRetur = refunds.reduce((t, r) => t + Number(r.amount || 0), 0);
+      html += `<div class="p-3 rounded-lg bg-rose-50 border border-rose-200 mt-2">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-rose-700">Riwayat Retur</span>
+          <span class="text-xs text-rose-700">Total diretur: <b>${formatIDR(totalRetur)}</b> &bull; Nilai akhir: <b>${formatIDR(Number(s.total) - totalRetur)}</b></span>
+        </div>
+        ${refunds.map(r => `
+          <div class="flex items-start justify-between gap-3 py-2 border-t border-rose-100">
+            <div class="min-w-0">
+              <div class="text-xs font-medium text-slate-900">Nota Retur #${r.id} &bull; ${formatIDR(r.amount)}</div>
+              <div class="text-xs text-slate-500">${r.date || ''}${r.reason ? ' &bull; ' + r.reason : ''}</div>
+              ${(r.items || []).length
+                ? `<div class="text-xs text-slate-500 mt-0.5">${r.items.map(i => `${i.name} &times;${parseInt(i.qty)}`).join(', ')}</div>`
+                : '<div class="text-xs text-slate-400 mt-0.5">Seluruh isi nota (rincian per item tidak tercatat).</div>'}
+            </div>
+            <a target="_blank" href="/kasir/refunds/${r.id}/print" class="shrink-0 inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-rose-600 hover:bg-rose-700 transition">
+              Cetak Nota Retur
+            </a>
+          </div>`).join('')}
+      </div>`;
+    }
 
     return html;
   }
