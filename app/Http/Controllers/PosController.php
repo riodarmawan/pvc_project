@@ -787,6 +787,10 @@ private function performFinalize(Request $request)
             // supaya nilai retur tidak melebihi yang pernah diakui/diterima.
             $refundValue = round($grossRevenue * $this->saleNetRatio($sale), 2);
 
+            // Simpan nilainya — dipakai laporan omset untuk mengurangi penjualan.
+            // Tanpa ini setiap laporan harus menghitung ulang prorata diskonnya sendiri.
+            DB::table('pos_refunds')->where('id', $refundId)->update(['amount' => $refundValue]);
+
             \App\Services\AccountingService::journalPosRefund(
                 $refundId, $refundValue, $branchId, $this->refundPaymentAllocation($sale->id, $refundValue)
             );

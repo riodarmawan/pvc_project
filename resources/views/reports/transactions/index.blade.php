@@ -70,6 +70,22 @@
  </form>
  </div>
 
+ <!-- Ringkasan -->
+ <div class="grid gap-4 sm:grid-cols-3">
+ <div class="rounded-2xl border bg-white shadow-card border-slate-200 p-5">
+ <div class="text-xs uppercase tracking-wide text-slate-500">Penjualan</div>
+ <div class="mt-1 text-xl font-semibold text-slate-900 tabular-nums">Rp {{ number_format($summary->total_penjualan ?? 0, 0, ',', '.') }}</div>
+ </div>
+ <div class="rounded-2xl border bg-white shadow-card border-slate-200 p-5">
+ <div class="text-xs uppercase tracking-wide text-slate-500">Retur</div>
+ <div class="mt-1 text-xl font-semibold text-rose-600 tabular-nums">- Rp {{ number_format($summary->total_retur ?? 0, 0, ',', '.') }}</div>
+ </div>
+ <div class="rounded-2xl border bg-white shadow-card border-slate-200 p-5">
+ <div class="text-xs uppercase tracking-wide text-slate-500">Omset Bersih</div>
+ <div class="mt-1 text-xl font-bold text-emerald-600 tabular-nums">Rp {{ number_format($summary->total_netto ?? 0, 0, ',', '.') }}</div>
+ </div>
+ </div>
+
  <!-- Tabel Laporan -->
  <div class="rounded-2xl border bg-white shadow-card border-slate-200 ">
  <div class="p-6 md:p-7">
@@ -96,6 +112,10 @@
  <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 ">
  {{ $tx->transaction_type }}
  </span>
+ @elseif($tx->transaction_type == 'Retur')
+ <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-rose-100 text-rose-700 ">
+ {{ $tx->transaction_type }}
+ </span>
  @else
  <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 ">
  {{ $tx->transaction_type }}
@@ -109,7 +129,9 @@
  <td class="py-3 pr-4 align-top">{{ $tx->customer_name ?? '-' }}</td>
  <td class="py-3 pr-4 align-top">{{ $tx->branch_name }}</td>
  <td class="py-3 pr-0 align-top text-right">
- Rp {{ number_format($tx->transaction_value, 0, ',', '.') }}
+ <span class="tabular-nums {{ $tx->transaction_value < 0 ? 'text-rose-600 font-medium' : '' }}">
+ {{ $tx->transaction_value < 0 ? '- ' : '' }}Rp {{ number_format(abs($tx->transaction_value), 0, ',', '.') }}
+ </span>
  </td>
  </tr>
  @empty

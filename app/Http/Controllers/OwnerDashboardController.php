@@ -52,26 +52,46 @@ class OwnerDashboardController extends Controller
         ));
     }
 
+    /**
+     * Omset BERSIH: penjualan dikurangi retur pada periode & cabang yang sama.
+     * Retur tidak mengurangi pos_sales.total (nota yang sudah dicetak harus tetap
+     * cocok), jadi pengurangnya diambil dari pos_refunds. Status REFUND ikut dihitung
+     * penjualannya karena transaksinya memang terjadi — pengurangannya sudah lewat retur.
+     */
     private function getTotalPenjualan($branchId, $dateRange)
     {
-        $query = PosSale::where('status', 'PAID');
-
+        $penjualan = PosSale::whereIn('status', ['PAID', 'REFUND']);
         if ($branchId) {
-            $query->where('branch_id', $branchId);
+            $penjualan->where('branch_id', $branchId);
         }
+        $this->applyDateRange($penjualan, $dateRange, 'sale_datetime');
 
+        // Retur dihitung pada TANGGAL RETUR-nya, bukan tanggal nota asli.
+        $retur = DB::table('pos_refunds as r')
+            ->join('pos_sales as s', 's.id', '=', 'r.sale_id');
+        if ($branchId) {
+            $retur->where('s.branch_id', $branchId);
+        }
+        $this->applyDateRange($retur, $dateRange, 'r.created_at');
+
+        return (float) $penjualan->sum('total') - (float) $retur->sum('r.amount');
+    }
+
+    /** Filter periode yang dipakai bersama oleh query penjualan & retur. */
+    private function applyDateRange($query, $dateRange, string $column)
+    {
         if ($dateRange === 'today') {
-            $query->whereDate('sale_datetime', today());
+            $query->whereDate($column, today());
         } elseif ($dateRange === '7days') {
-            $query->where('sale_datetime', '>=', now()->subDays(7));
+            $query->where($column, '>=', now()->subDays(7));
         } elseif ($dateRange === '30days') {
-            $query->where('sale_datetime', '>=', now()->subDays(30));
+            $query->where($column, '>=', now()->subDays(30));
         } elseif ($dateRange === 'month') {
-            $query->whereMonth('sale_datetime', now()->month)
-                  ->whereYear('sale_datetime', now()->year);
+            $query->whereMonth($column, now()->month)
+                  ->whereYear($column, now()->year);
         }
 
-        return $query->sum('total');
+        return $query;
     }
 
     private function getLabaBersih($branchId, $dateRange)
@@ -110,19 +130,36 @@ class OwnerDashboardController extends Controller
         return $revenue - $cogs - $expenses;
     }
 
+    /** Grafik 7 hari, netto setelah retur — konsisten dengan kartu Total Penjualan. */
     private function getPenjualan7Hari($branchId)
     {
-        $query = PosSale::where('status', 'PAID')
-            ->where('sale_datetime', '>=', now()->subDays(7));
+        $sejak = now()->subDays(7);
 
+        $penjualan = PosSale::whereIn('status', ['PAID', 'REFUND'])
+            ->where('sale_datetime', '>=', $sejak);
         if ($branchId) {
-            $query->where('branch_id', $branchId);
+            $penjualan->where('branch_id', $branchId);
         }
+        $penjualan = $penjualan
+            ->selectRaw('DATE(sale_datetime) as tanggal, SUM(total) as total')
+            ->groupBy('tanggal')->pluck('total', 'tanggal');
 
-        return $query->selectRaw('DATE(sale_datetime) as tanggal, SUM(total) as total')
-            ->groupBy('tanggal')
-            ->orderBy('tanggal')
-            ->get();
+        $retur = DB::table('pos_refunds as r')
+            ->join('pos_sales as s', 's.id', '=', 'r.sale_id')
+            ->where('r.created_at', '>=', $sejak);
+        if ($branchId) {
+            $retur->where('s.branch_id', $branchId);
+        }
+        $retur = $retur
+            ->selectRaw('DATE(r.created_at) as tanggal, SUM(r.amount) as total')
+            ->groupBy('tanggal')->pluck('total', 'tanggal');
+
+        // Gabungkan tanggalnya: hari yang isinya cuma retur pun harus ikut tampil.
+        return $penjualan->keys()->merge($retur->keys())->unique()->sort()->values()
+            ->map(fn ($tanggal) => (object) [
+                'tanggal' => $tanggal,
+                'total'   => (float) ($penjualan[$tanggal] ?? 0) - (float) ($retur[$tanggal] ?? 0),
+            ]);
     }
 
     private function getLabaBulanan($branchId)
