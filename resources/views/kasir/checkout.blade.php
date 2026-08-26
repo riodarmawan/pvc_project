@@ -55,7 +55,9 @@
     </div>
 
     {{-- Customer Panel --}}
-    <div id="customer-panel" class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    {{-- overflow-hidden dihapus: dropdown hasil pencarian pelanggan diposisikan
+         absolute dan sebelumnya terpotong oleh panel ini. --}}
+    <div id="customer-panel" class="bg-white rounded-xl border border-slate-200 relative z-10">
       @include('kasir.partials._customer', [
         'customerId'       => $customerId,
         'selectedCustomer' => $selectedCustomer,

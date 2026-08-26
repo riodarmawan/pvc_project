@@ -4,7 +4,7 @@
   $customerResults  = $customerResults ?? [];
 @endphp
 
-<div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
+<div class="px-4 py-3 border-b border-slate-200 bg-slate-50 rounded-t-xl">
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-2">
       <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -40,7 +40,22 @@
         </div>
         <input type="text" id="customer-search" placeholder="Cari nama/telepon..."
                class="w-full h-9 pl-8 pr-3 rounded-lg border border-slate-200 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" autocomplete="off">
-        <div id="customer-results" class="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 hidden max-h-48 overflow-y-auto"></div>
+        {{-- Hasil pencarian dirender di sini; checkout.js menyalin isinya ke dropdown.
+             Sebelumnya div ini dibiarkan kosong sehingga hasil dari server terbuang
+             dan pencarian pelanggan seolah tidak pernah menemukan apa pun. --}}
+        <div id="customer-results" class="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 hidden max-h-48 overflow-y-auto">
+          @forelse ($customerResults as $cr)
+            <button type="button" onclick="checkoutSelectCustomer({{ (int) $cr->id }}, @js($cr->name))"
+                    class="w-full text-left px-3 py-2 hover:bg-emerald-50 transition border-b border-slate-100 last:border-0">
+              <div class="text-sm font-medium text-slate-900 truncate">{{ $cr->name }}</div>
+              <div class="text-xs text-slate-500 truncate">
+                {{ $cr->phone ?: 'Tanpa telepon' }}@if($cr->address) · {{ Str::limit($cr->address, 40) }}@endif
+              </div>
+            </button>
+          @empty
+            <div class="px-3 py-2 text-xs text-slate-500">Pelanggan tidak ditemukan.</div>
+          @endforelse
+        </div>
       </div>
       <button onclick="openCustomerModal()" class="h-9 px-3 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 transition flex items-center gap-1 flex-shrink-0 active:scale-95">
         <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>

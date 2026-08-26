@@ -110,6 +110,25 @@
  </div>
  </div>
 
+ <!-- Ringkasan Nilai Aset -->
+ <div class="mt-6 grid gap-4 sm:grid-cols-3">
+ <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+ <div class="text-xs uppercase tracking-wide text-slate-500">Nilai Aset Persediaan</div>
+ <div class="mt-1 text-2xl font-bold text-emerald-600 tabular-nums">Rp {{ number_format($ringkasan->total_nilai ?? 0, 0, ',', '.') }}</div>
+ <div class="mt-1 text-xs text-slate-500">Dinilai dengan HPP (harga modal)</div>
+ </div>
+ <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+ <div class="text-xs uppercase tracking-wide text-slate-500">Total Kuantitas</div>
+ <div class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{{ number_format($ringkasan->total_qty ?? 0, 0, ',', '.') }}</div>
+ <div class="mt-1 text-xs text-slate-500">Seluruh item yang stoknya ada</div>
+ </div>
+ <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+ <div class="text-xs uppercase tracking-wide text-slate-500">Belum Ada HPP</div>
+ <div class="mt-1 text-2xl font-semibold {{ ($ringkasan->tanpa_hpp ?? 0) > 0 ? 'text-amber-600' : 'text-slate-900' }} tabular-nums">{{ number_format($ringkasan->tanpa_hpp ?? 0) }}</div>
+ <div class="mt-1 text-xs text-slate-500">Baris ini dihitung Rp 0</div>
+ </div>
+ </div>
+
  <!-- Responsive Table -->
  <div class="mt-6 overflow-x-auto">
  <table class="w-full text-sm">
@@ -123,6 +142,7 @@
  SKU Produk
  </div>
  </th>
+ <th class="py-3 pr-4 min-w-[140px]">Nilai (HPP)</th>
  <th class="py-3 pr-4 min-w-[220px]">
  <div class="inline-flex items-center gap-2">
  <svg width="20" height="20" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,6 +223,10 @@
  </td>
 
  <!-- Stock Column -->
+ <td class="py-3 pr-4 align-middle tabular-nums">
+ <div class="font-medium">Rp {{ number_format($stock->nilai, 0, ',', '.') }}</div>
+ @if(($stock->hpp ?? 0) <= 0)<div class="text-xs text-amber-600">HPP belum diisi</div>@endif
+ </td>
  <td class="py-3 pr-0 align-top">
  <div class="space-y-2">
  <div class="flex items-baseline gap-2">
@@ -234,7 +258,7 @@
  </tr>
  @empty
  <tr>
- <td colspan="5" class="py-12">
+ <td colspan="6" class="py-12">
  <div class="max-w-xl mx-auto text-center space-y-6">
  <!-- Empty State Illustration -->
  <div class="relative mx-auto w-20 h-20">

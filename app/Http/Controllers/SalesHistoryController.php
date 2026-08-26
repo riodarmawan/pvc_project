@@ -219,7 +219,8 @@ public function ajaxTable(Request $r)
         $sale = DB::table('pos_sales as s')
             ->leftJoin('customers as c','c.id','=','s.customer_id')
             ->leftJoin('branches as b','b.id','=','s.branch_id')
-            ->selectRaw('s.*, c.name as customer_name, c.phone as customer_phone, b.name as branch_name')
+            ->selectRaw('s.*, c.name as customer_name, c.phone as customer_phone,
+                         c.address as customer_address, b.name as branch_name')
             ->where('s.id', $id)->first();
 
         if (!$sale || !in_array((int)$sale->branch_id, $allowed, true)) {
@@ -230,6 +231,18 @@ public function ajaxTable(Request $r)
             ->join('products as p','p.id','=','l.product_id')
             ->where('l.pos_sale_id', $id)
             ->selectRaw('p.sku, p.name, l.qty, l.price, l.subtotal')->get();
+
+        // Metode pembayaran — sebelumnya tidak pernah diambil, jadi tak muncul di nota.
+        $pays = DB::table('pos_payments')
+            ->select('method', DB::raw('SUM(amount) as amt'))
+            ->where('pos_sale_id', $id)->groupBy('method')->get();
+
+        $labelMetode = ['CASH'=>'Tunai','CARD'=>'Kartu','QR'=>'QRIS','TRANSFER'=>'Transfer','CREDIT'=>'Kredit'];
+
+        // pos_sale_lines.price disimpan BRUTO; diskon nota ada di header. Subtotal
+        // bruto ditampilkan supaya potongannya terlihat, bukan cuma total akhirnya.
+        $discount = (float) ($sale->discount ?? 0);
+        $bruto    = (float) $sale->total + $discount;
 
         // HTML minimal untuk print
         $html  = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">';
@@ -242,6 +255,9 @@ public function ajaxTable(Request $r)
         $html .= '<div class="muted">Tanggal: '.$sale->sale_datetime.'</div>';
         if ($sale->customer_name) {
             $html .= '<div class="muted">Pelanggan: '.e($sale->customer_name).' '.($sale->customer_phone? '• '.e($sale->customer_phone):'').'</div>';
+            if (!empty($sale->customer_address)) {
+                $html .= '<div class="muted">Alamat: '.nl2br(e($sale->customer_address)).'</div>';
+            }
         }
         $html .= '<hr style="margin:12px 0">';
         $html .= '<table><thead><tr><th>Produk</th><th class="right">Qty</th><th class="right">Harga</th><th class="right">Subtotal</th></tr></thead><tbody>';
@@ -251,7 +267,22 @@ public function ajaxTable(Request $r)
             $html .= '<td class="right">Rp '.number_format((float)$ln->price,2,',','.').'</td>';
             $html .= '<td class="right">Rp '.number_format((float)$ln->subtotal,2,',','.').'</td></tr>';
         }
-        $html .= '</tbody></table><div class="right h" style="margin-top:8px">Total: Rp '.number_format((float)$sale->total,2,',','.').'</div>';
+        $html .= '</tbody></table>';
+
+        $html .= '<div class="right" style="margin-top:8px">Subtotal: Rp '.number_format($bruto,2,',','.').'</div>';
+        if ($discount > 0) {
+            $html .= '<div class="right">Diskon: - Rp '.number_format($discount,2,',','.').'</div>';
+        }
+        $html .= '<div class="right h" style="margin-top:4px">Total: Rp '.number_format((float)$sale->total,2,',','.').'</div>';
+
+        if ($pays->count()) {
+            $html .= '<div style="margin-top:12px"><div class="h">Pembayaran</div>';
+            foreach ($pays as $p) {
+                $nama = $labelMetode[$p->method] ?? $p->method;
+                $html .= '<div class="muted">'.e($nama).': Rp '.number_format((float)$p->amt,2,',','.').'</div>';
+            }
+            $html .= '</div>';
+        }
         $html .= '<script>window.print()</script></body></html>';
 
         return response($html);

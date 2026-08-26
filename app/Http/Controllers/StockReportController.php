@@ -25,6 +25,8 @@ class StockReportController extends Controller
                 'p.sku as product_sku',
                 'p.name as product_name',
                 'q.qty',
+                'p.hpp',
+                DB::raw('q.qty * COALESCE(p.hpp, 0) as nilai'),
                 'l.name as location_name',
                 'b.name as branch_name'
             )
@@ -38,12 +40,26 @@ class StockReportController extends Controller
         // 4. Urutkan berdasarkan kuantitas dari terkecil ke terbesar
         $query->orderBy('q.qty', 'asc');
         
-        // 5. Ambil hasil query dengan paginasi
+        // 5. Nilai aset persediaan atas SELURUH data terfilter (bukan cuma halaman ini).
+        //    Dinilai pakai HPP (harga modal) — lazimnya nilai persediaan dicatat sebesar
+        //    biaya perolehan, bukan harga jual. Produk tanpa HPP dihitung 0 dan dihitung
+        //    terpisah supaya ketahuan kalau master datanya belum lengkap.
+        //    select() (bukan selectRaw) supaya kolom detail diganti, bukan ditambah —
+        //    kolom non-agregat akan ditolak MySQL saat ONLY_FULL_GROUP_BY aktif.
+        $ringkasan = (clone $query)
+            ->select(DB::raw('COALESCE(SUM(q.qty * COALESCE(p.hpp, 0)), 0) as total_nilai,
+                              COALESCE(SUM(q.qty), 0) as total_qty,
+                              SUM(CASE WHEN COALESCE(p.hpp, 0) <= 0 THEN 1 ELSE 0 END) as tanpa_hpp'))
+            ->reorder()
+            ->first();
+
+        // 6. Ambil hasil query dengan paginasi
         $stockData = $query->paginate(50)->withQueryString();
 
-        // 6. Kirim data ke view
+        // 7. Kirim data ke view
         return view('reports.stock.index', [
             'stockData'      => $stockData,
+            'ringkasan'      => $ringkasan,
             'branches'       => $branches,
             'selectedBranch' => $request->input('branch_id'),
         ]);

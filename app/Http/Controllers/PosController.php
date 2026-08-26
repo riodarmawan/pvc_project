@@ -1002,7 +1002,8 @@ private function respond(Request $req, array $jsonPayload, string $redirectRoute
         ->leftJoin('customers as c','c.id','=','s.customer_id')
         ->leftJoin('branches  as b','b.id','=','s.branch_id')
         ->where('s.id', $saleId)
-        ->selectRaw('s.*, c.name as customer_name, c.phone as customer_phone, b.name as branch_name')
+        ->selectRaw('s.*, c.name as customer_name, c.phone as customer_phone,
+                     c.address as customer_address, b.name as branch_name')
         ->first();
 
     $lines = DB::table('pos_sale_lines as l')
@@ -1017,11 +1018,14 @@ private function respond(Request $req, array $jsonPayload, string $redirectRoute
         ->where('pos_sale_id', $saleId)
         ->groupBy('method')->get();
 
+    $labelMetode = ['CASH'=>'Tunai','CARD'=>'Kartu','QR'=>'QRIS','TRANSFER'=>'Transfer','CREDIT'=>'Kredit'];
+
     $sumPaid = 0.0;
     $payRows = '';
     foreach ($pays as $p) {
         $sumPaid += (float)$p->amt;
-        $payRows .= '<div>'.e($p->method).': <b>Rp '.number_format((float)$p->amt,2,',','.').'</b></div>';
+        $nama = $labelMetode[$p->method] ?? $p->method;
+        $payRows .= '<div>'.e($nama).': <b>Rp '.number_format((float)$p->amt,2,',','.').'</b></div>';
     }
 
     // Baca kembalian dari notes (jika ada)
@@ -1036,6 +1040,9 @@ private function respond(Request $req, array $jsonPayload, string $redirectRoute
     $html .= '<div class="text-sm text-gray-600">Cabang: '.e($sale->branch_name ?? '-').'</div>';
     if ($sale->customer_name) {
         $html .= '<div class="text-sm text-gray-600">Pelanggan: '.e($sale->customer_name).' '.($sale->customer_phone ? ' • '.e($sale->customer_phone) : '').'</div>';
+        if (!empty($sale->customer_address)) {
+            $html .= '<div class="text-sm text-gray-600">Alamat: '.nl2br(e($sale->customer_address)).'</div>';
+        }
     }
     $html .= '</div><hr class="my-3">';
 
@@ -1055,10 +1062,18 @@ private function respond(Request $req, array $jsonPayload, string $redirectRoute
     }
     $html .= '</tbody></table><hr class="my-3">';
 
-    // Ringkasan bayar
+    // Ringkasan bayar. Harga baris disimpan BRUTO & diskon ada di header, jadi
+    // subtotal bruto ditampilkan supaya potongannya kelihatan.
+    $discount = (float) ($sale->discount ?? 0);
+    $bruto    = (float) $sale->total + $discount;
+
     $html .= '<div class="text-sm">';
-    $html .= $payRows ?: '<div>Pembayaran: —</div>';
+    $html .= '<div>Subtotal: Rp '.number_format($bruto,2,',','.').'</div>';
+    if ($discount > 0) {
+        $html .= '<div>Diskon: <b>- Rp '.number_format($discount,2,',','.').'</b></div>';
+    }
     $html .= '<div>Total: <b>Rp '.number_format((float)$sale->total,2,',','.').'</b></div>';
+    $html .= $payRows ?: '<div>Pembayaran: —</div>';
     if ($change > 0) {
         $html .= '<div>Kembali: <b>Rp '.number_format($change,2,',','.').'</b></div>';
     }
